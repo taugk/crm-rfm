@@ -3,11 +3,11 @@
         {{-- HEADER SIDEBAR --}}
         <div class="sidebar-header">
             <div class="d-flex justify-content-between align-items-center">
-                <div class="logo">
+                {{-- <div class="logo">
                     <a href="{{ url('/dashboard') }}">
                         <img src="{{ asset('assets/images/logo/logo.png') }}" alt="Logo">
                     </a>
-                </div>
+                </div> --}}
                 {{-- Tombol Tutup (X) - Muncul di mobile & bisa diaktifkan di desktop --}}
                 <div class="sidebar-toggler x">
                     <a href="#" class="sidebar-hide d-xl-none d-block"><i class="bi bi-x bi-middle"></i></a>
