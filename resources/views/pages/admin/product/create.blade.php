@@ -110,7 +110,7 @@
                             <button type="submit" class="btn btn-primary btn-lg shadow">
                                 <i class="bi bi-save me-2"></i>Simpan Produk
                             </button>
-                            <a href="/products" class="btn btn-light mt-2">Batal</a>
+                            <a href="{{ route('admin.products') }}" class="btn btn-light mt-2">Batal</a>
                         </div>
                     </div>
                 </div>
