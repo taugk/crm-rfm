@@ -10,20 +10,26 @@ use Illuminate\Database\Eloquent\Factories\Factory;
  */
 class CategoryFactory extends Factory
 {
-    protected $model = Category::class;
     /**
-     * Define the model's default state.
+     * Nama model yang terkait.
+     */
+    protected $model = Category::class;
+
+    /**
+     * Mendefinisikan state default untuk model Category.
      *
      * @return array<string, mixed>
      */
     public function definition(): array
     {
         return [
-            'kd_category' => $this->faker->unique()->bothify('CAT-###'),
-            'name' => $this->faker->unique()->word(),
-            'description' => $this->faker->sentence(),
-            'created_at' => now(),
-            'updated_at' => now(),
+            // Menggunakan fake() untuk stabilitas di lingkungan production
+            'kd_category' => fake()->unique()->bothify('CAT-###'),
+            'name'        => fake()->unique()->word(),
+            'description' => fake()->sentence(),
+            
+            'created_at'  => now(),
+            'updated_at'  => now(),
         ];
     }
 }
