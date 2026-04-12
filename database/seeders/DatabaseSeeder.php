@@ -3,11 +3,6 @@
 namespace Database\Seeders;
 
 use App\Models\User;
-use App\Models\Address;
-use App\Models\Product;
-use App\Models\Category;
-use App\Models\Customers;
-use App\Models\ProductDetail;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
@@ -44,10 +39,7 @@ class DatabaseSeeder extends Seeder
         ]);
 
         // 2. SEED PRODUK & KATEGORI
-        Category::factory(5)->create();
-        Product::factory(20)->create();
-        ProductDetail::factory(20)->create();
-        Customers::factory(50)->create();
+        
 
        
     }
