@@ -4,7 +4,18 @@
         <div class="sidebar-header">
             <div class="d-flex justify-content-between align-items-center">
                 <div class="logo">
-                    <a href="{{ route('admin.dashboard') }}">
+                    @php
+                        $role = auth()->user()->role ?? null;
+
+                        $dashboardRoute = match($role) {
+                            'admin' => 'admin.dashboard',
+                            'manager' => 'manager.dashboard',
+                            'kasir' => 'kasir.dashboard',
+                            default => 'login'
+                        };
+                    @endphp
+
+                    <a href="{{ route($dashboardRoute) }}">
                         <h4 class="fw-bold">CRM <span class="text-primary">SYSTEM</span></h4>
                     </a>
                 </div>
@@ -40,8 +51,17 @@
                 
                 {{-- SECTION 1: DASHBOARD (Semua Role) --}}
                 <li class="sidebar-title">Menu Utama</li>
-                <li class="sidebar-item {{ is_active('admin.dashboard') }}">
-                    <a href="{{ route('admin.dashboard') }}" class="sidebar-link">
+                @php
+                    $dashboardRoute = match($role) {
+                        'admin' => 'admin.dashboard',
+                        'manager' => 'manager.dashboard',
+                        'kasir' => 'kasir.dashboard',
+                        default => 'login'
+                    };
+                @endphp
+
+                <li class="sidebar-item {{ is_active($dashboardRoute) }}">
+                    <a href="{{ route($dashboardRoute) }}" class="sidebar-link">
                         <i class="bi bi-speedometer2"></i>
                         <span>Dashboard</span>
                     </a>
@@ -111,14 +131,14 @@
                     </li>
 
                     {{-- Analisis & Laporan --}}
-                    @php $analisisRoutes = ['rfm*', 'admin.reports.transactions*', 'admin.reports.products*']; @endphp
+                    @php $analisisRoutes = ['rfm.index*', 'admin.reports.transactions*', 'admin.reports.products*']; @endphp
                     <li class="sidebar-item has-sub {{ is_open($analisisRoutes) }}">
                         <a href="#" class="sidebar-link">
                             <i class="bi bi-bar-chart-line"></i>
                             <span>Analisis & Laporan</span>
                         </a>
                         <ul class="submenu {{ is_open($analisisRoutes) }}" style="{{ is_show($analisisRoutes) }}">
-                            <li class="submenu-item {{ is_active('rfm*') }}"><a href="{{ url('/rfm') }}">Analisis RFM</a></li>
+                            <li class="submenu-item {{ is_active('rfm.index*') }}"><a href="{{ route('rfm.index') }}">Analisis RFM</a></li>
                             <hr class="mx-3 my-2" style="opacity: 0.1; border-color: #fff;">
                             <li class="submenu-item {{ is_active('admin.reports.transactions*') }}"><a href="{{ route('admin.reports.transactions') }}">Laporan Penjualan</a></li>
                             <li class="submenu-item {{ is_active('admin.reports.products*') }}"><a href="{{ route('admin.reports.products') }}">Laporan Produk Terlaris</a></li>

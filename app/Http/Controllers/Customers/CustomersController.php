@@ -34,7 +34,7 @@ class CustomersController extends Controller
     public function profile()
     {
         $customer = Auth::guard('customers')->user();
-        return view('pages.customer.profile', compact('customer'));
+        return view('pages.customers.profile', compact('customer'));
     }
 
     /**
@@ -45,10 +45,14 @@ class CustomersController extends Controller
         $customer = Auth::guard('customers')->user();
         
         // Menggunakan pagination agar halaman tidak berat jika transaksi sudah banyak
-        $allTransactions = Transaction::where('customer_id', $customer->id)
+        $transactions = Transaction::where('customer_id', $customer->id)
                             ->latest()
                             ->paginate(10);
 
-        return view('pages.customer.transactions', compact('allTransactions'));
+        return view('pages.customers.transactions', compact('transactions'));
+    }
+
+    public function redeem(){
+        return view('pages.customers.redeem');
     }
 }

@@ -1,23 +1,21 @@
 <?php
 
-use Illuminate\Support\Facades\Route;
-
-// Auth & General Controllers
-use App\Http\Controllers\Auth\LoginController;
-use App\Http\Controllers\Customers\CustomersController;
-
-// Admin Controllers
-use App\Http\Controllers\Admin\UserController;
-use App\Http\Controllers\Admin\CustomerController;
-use App\Http\Controllers\Admin\ProductController;
 use App\Http\Controllers\Admin\CategoryController;
+use App\Http\Controllers\Admin\CustomerController;
 use App\Http\Controllers\Admin\LoyaltyPointsController;
 use App\Http\Controllers\Admin\LoyaltyRuleController;
-use App\Http\Controllers\Admin\TransactionController;
-use App\Http\Controllers\Admin\PromotionsController;
-use App\Http\Controllers\Admin\PointRewardController;
-use App\Http\Controllers\Admin\ReportsController;
 use App\Http\Controllers\Admin\PointRedemptionsController;
+use App\Http\Controllers\Admin\PointRewardController;
+use App\Http\Controllers\Admin\ProductController;
+use App\Http\Controllers\Admin\PromotionsController;
+use App\Http\Controllers\Admin\ReportsController;
+use App\Http\Controllers\Admin\TransactionController;
+use App\Http\Controllers\Admin\UserController;
+use App\Http\Controllers\Auth\LoginController;
+use App\Http\Controllers\Customers\CustomersController;
+use App\Http\Controllers\kasir\KasirController;
+use App\Http\Controllers\RFM\RfmController;
+use Illuminate\Support\Facades\Route;
 
 /*
 |--------------------------------------------------------------------------
@@ -41,9 +39,10 @@ Route::post('/otp/verify', [LoginController::class, 'verifyOtp'])->name('otp.ver
 | CUSTOMER DASHBOARD (Guard: customer)
 |--------------------------------------------------------------------------
 */
-Route::middleware(['auth:customers'])->group(function () {
-    Route::get('/customers/dashboard', [CustomersController::class, 'index'])->name('customers.dashboard');
-    Route::get('/customers/transactions', [CustomersController::class, 'transactions'])->name('customers.transactions');
+Route::middleware(['auth:customers'])->prefix('/customer')->group(function () {
+    Route::get('/dashboard', [CustomersController::class, 'index'])->name('customers.dashboard');
+    Route::get('/transactions', [CustomersController::class, 'transactions'])->name('customers.transactions');
+    Route::get('/redeem-point', [CustomersController::class, 'redeem'])->name('customers.points.redeem');
 });
 
 /*
@@ -208,6 +207,19 @@ Route::middleware(['auth:web', 'role:admin'])->prefix('admin')->group(function (
     });
 });
 
+Route::middleware(['auth', 'role:admin,manager'])->prefix('rfm')->name('rfm.')->group(function () {
+    Route::get('/',                             [RfmController::class, 'index'])              ->name('index');
+    Route::get('/calculate',                    [RfmController::class, 'create'])             ->name('calculate');
+    Route::post('/calculate',                   [RfmController::class, 'store'])              ->name('store');
+    Route::get('/batch/{batch}',                [RfmController::class, 'showBatch'])          ->name('batch.show');
+    Route::patch('/batch/{batch}/labels',       [RfmController::class, 'updateClusterLabels'])->name('batch.labels');
+    Route::get('/customer/{customerId}/history',[RfmController::class, 'customerHistory'])    ->name('customer.history');
+ 
+    // API (JSON)
+    Route::get('/api/batch/{batch}/scatter',    [RfmController::class, 'scatterData'])        ->name('api.scatter');
+    Route::get('/api/elbow',                    [RfmController::class, 'elbowData'])          ->name('elbow');
+});
+
 /*
 |--------------------------------------------------------------------------
 | MANAGER PANEL
@@ -225,7 +237,8 @@ Route::middleware(['auth:web', 'role:manager'])->prefix('manager')->group(functi
 |--------------------------------------------------------------------------
 */
 Route::middleware(['auth:web', 'role:kasir'])->prefix('kasir')->group(function () {
-    Route::get('/dashboard', function () {
-        return view('pages.kasir.index');
-    })->name('kasir.dashboard');
+    Route::get('/dashboard', [KasirController::class, 'index'])->name('kasir.dashboard');
+    Route::get('/transactions', [KasirController::class, 'createTransactions'])->name('kasir.create.trasaction');
+    Route::post('/transactions/store', [KasirController::class, 'transactionStore'])->name('kasir.store.transaction');
+    Route::get('/promotions/check', [TransactionController::class, 'checkPromo'])->name('kasir.promo.check');
 });
