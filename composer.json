@@ -10,7 +10,7 @@
         "laravel/framework": "^13.0",
         "laravel/tinker": "^3.0",
         "maatwebsite/excel": "*",
-        "php-ai/php-ml": "*",
+        "php-ai/php-ml": "^0.10.0",
         "spatie/simple-excel": "^3.9"
     },
     "require-dev": {
