@@ -157,6 +157,7 @@ class TransactionSheetImport implements
 
     // ================= CREATE =================
     if (!$customer) {
+        $defaultPass = "member123";
         $customer = Customers::create([
             'name'  => $name ?: $identifier,
             'email' => $email,
@@ -164,7 +165,7 @@ class TransactionSheetImport implements
             'type'  => 'member',
             'status'=> 'active',
             'role'  => 'customer',
-            'password' => null,
+            'password' => bcrypt($defaultPass),
             'remember_token' => Str::random(10),
         ]);
     } else {

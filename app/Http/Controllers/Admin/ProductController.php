@@ -177,9 +177,45 @@ class ProductController extends Controller
         );
     }
 
-    public function productReports(){
-        
-    }
+    public function productReports(Request $request)
+{
+    // 1. Ambil Parameter Filter dari Request
+    $startDate = $request->input('start_date', now()->startOfMonth()->format('Y-m-d'));
+    $endDate = $request->input('end_date', now()->format('Y-m-d'));
+    $search = $request->input('search');
+
+    // 2. Query Produk Terlaris
+    $report = DB::table('transactions_details')
+        ->join('product_details', 'transactions_details.product_detail_id', '=', 'product_details.id')
+        ->join('products', 'product_details.product_id', '=', 'products.id')
+        ->join('transactions', 'transactions_details.transaction_id', '=', 'transactions.id')
+        // Filter transaksi yang sukses saja
+        ->where('transactions.status', 'completed')
+        // Filter Tanggal
+        ->whereDate('transactions.transaction_date', '>=', $startDate)
+        ->whereDate('transactions.transaction_date', '<=', $endDate)
+        // Filter Pencarian (Jika ada)
+        ->when($search, function ($query) use ($search) {
+            return $query->where(function($q) use ($search) {
+                $q->where('products.name', 'like', "%{$search}%")
+                  ->orWhere('products.sku', 'like', "%{$search}%");
+            });
+        })
+        ->select(
+            'products.id',
+            'products.name',
+            'products.sku',
+            'product_details.variant',
+            DB::raw('SUM(transactions_details.quantity) as total_sold'),
+            DB::raw('SUM(transactions_details.subtotal) as total_revenue')
+        )
+        ->groupBy('products.id', 'products.name', 'products.sku', 'product_details.variant')
+        ->orderBy('total_sold', 'desc')
+        ->get();
+
+    // 3. Kirim data ke view
+    return view('pages.admin.reports.product-reports', compact('report', 'startDate', 'endDate'));
+}
 
     
 

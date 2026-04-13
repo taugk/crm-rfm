@@ -23,7 +23,7 @@ class RfmScore extends Model
         'distance_to_centroid' => 'float',
     ];
  
-    public function customer()         { return $this->belongsTo(Customers::class); }
+    public function customer()         { return $this->belongsTo(Customers::class, 'customer_id'); }
     public function calculationBatch() { return $this->belongsTo(RfmCalculationBatch::class, 'calculation_batch_id'); }
     public function segmentHistory()   { return $this->hasMany(RfmSegmentHistory::class); }
 }

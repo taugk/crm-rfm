@@ -241,40 +241,41 @@
         renderCart();
     }
 
-    // 2. LOGIKA PROMO
-    document.getElementById('btnApplyPromo').addEventListener('click', async function() {
-        const code = document.getElementById('promoCodeInput').value;
-        const subtotal = cart.reduce((sum, item) => sum + (item.price * item.qty), 0);
+    // 2. LOGIKA PROMO (PERBAIKAN: Tambahkan parameter customer_id)
+document.getElementById('btnApplyPromo').addEventListener('click', async function() {
+    const code = document.getElementById('promoCodeInput').value;
+    const subtotal = cart.reduce((sum, item) => sum + (item.price * item.qty), 0);
+    // AMBIL ID CUSTOMER DARI INPUT HIDDEN
+    const customerId = document.getElementById('selectedCustomerId').value;
 
-        if (cart.length === 0) return alert('Keranjang masih kosong!');
-        if (!code) return;
+    if (cart.length === 0) return alert('Keranjang masih kosong!');
+    if (!code) return alert('Masukkan kode promo!');
+    
+    // Pastikan customer sudah dipilih jika tipenya member
+    const isMemberMode = document.getElementById('btnMember').classList.contains('active');
+    if (isMemberMode && (!customerId || customerId == 1)) {
+        return alert('Pilih member terlebih dahulu untuk mengecek validitas promo segmen!');
+    }
 
-        try {
-            // Gantilah endpoint ini dengan route pengecekan promo Anda
-            const response = await fetch(`/admin/promotions/check?code=${code}`);
-            const result = await response.json();
+    try {
+        // PERBAIKAN: Kirim customer_id dan subtotal ke server
+        const response = await fetch(`/admin/promotions/check?code=${code}&customer_id=${customerId}&subtotal=${subtotal}`);
+        const result = await response.json();
 
-            if (result.status === 'error') {
-                alert(result.message);
-                return;
-            }
-
-            const promo = result.data;
-
-            // Syarat Minimal Belanja
-            if (subtotal < promo.min_spend) {
-                alert(`Promo ini butuh belanja min. ${formatRupiah(promo.min_spend)}`);
-                return;
-            }
-
-            appliedPromo = promo;
-            document.getElementById('promoCodeInput').value = '';
-            renderPromoInfo();
-            updateSummary();
-        } catch (error) {
-            alert('Gagal menghubungkan ke server.');
+        if (result.status === 'error') {
+            alert(result.message);
+            return;
         }
-    });
+
+        const promo = result.data;
+        appliedPromo = promo;
+        document.getElementById('promoCodeInput').value = '';
+        renderPromoInfo();
+        updateSummary();
+    } catch (error) {
+        alert('Gagal menghubungkan ke server.');
+    }
+});
 
     function renderPromoInfo() {
         const area = document.getElementById('promoInfoArea');
@@ -330,10 +331,11 @@
     }
 
     function updateSummary() {
+        // 1. Hitung Subtotal Awal (Gross)
         const subtotal = cart.reduce((sum, item) => sum + (item.price * item.qty), 0);
         let discount = 0;
 
-        // Hitung Diskon Promo
+        // 2. Hitung Diskon Promo
         if (appliedPromo) {
             if (subtotal < appliedPromo.min_spend) {
                 appliedPromo = null;
@@ -348,11 +350,14 @@
             }
         }
 
+        // 3. LOGIKA PAJAK: Pajak dihitung dari Subtotal AWAL (sebelum diskon)
+        const tax = subtotal * 0.11; 
+
+        // 4. TOTAL AKHIR: (Subtotal - Diskon) + Pajak
         const subtotalAfterDiscount = subtotal - discount;
-        const tax = subtotalAfterDiscount * 0.11;
         const total = subtotalAfterDiscount + tax;
 
-        // UI Update
+        // --- UPDATE UI ---
         document.getElementById('txtSubtotal').innerText = formatRupiah(subtotal);
         document.getElementById('txtTax').innerText = formatRupiah(tax);
         document.getElementById('txtTotal').innerText = formatRupiah(total);
@@ -365,7 +370,7 @@
             rowDiscount.classList.add('d-none');
         }
 
-        // Hidden Inputs Sync
+        // --- SYNC HIDDEN INPUTS (Untuk dikirim ke Database) ---
         document.getElementById('f-subtotal').value = Math.round(subtotal);
         document.getElementById('f-discount').value = Math.round(discount);
         document.getElementById('f-tax').value = Math.round(tax);

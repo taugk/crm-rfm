@@ -52,4 +52,31 @@ class Customers extends Authenticatable
     {
         return $this->hasMany(Transaction::class, 'customer_id');
     }
+
+    public function latestRfm()
+    {
+        // Mengambil satu record RFM terbaru
+        return $this->hasOne(RfmScore::class, 'customer_id')->latestOfMany();
+    }
+
+    public function getSegmentNameAttribute()
+    {
+        // Akses: $customer->segment_name
+        return $this->latestRfm ? $this->latestRfm->segment_name : 'No Segment';
+    }
+    public function loyaltyPoints()
+{
+    return $this->hasMany(LoyaltyPoints::class, 'customer_id');
+}
+
+    public function rfmScore()
+{
+    // Mengambil rfm_score terbaru untuk customer ini
+    return $this->hasOne(RfmScore::class, 'customer_id', 'id')->latestOfMany();
+}
+
+public function redemptions()
+{
+    return $this->hasMany(PointRedemption::class, 'customer_id');
+}
 }

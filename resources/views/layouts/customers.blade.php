@@ -109,7 +109,7 @@
 
     <nav class="navbar navbar-expand-lg sticky-top">
         <div class="container">
-            <a class="navbar-brand fs-3" href="#">COFFEE<span style="opacity: 0.4">HUB.</span></a>
+            <a class="navbar-brand fs-3" href="{{ route('customers.dashboard') }}">COFFEE<span style="opacity: 0.4">HUB.</span></a>
             
             <button class="navbar-toggler border-0 shadow-none" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
                 <i class="bi bi-grid-fill text-primary"></i>
@@ -118,22 +118,31 @@
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav mx-auto">
                     <li class="nav-item">
-                        <a class="nav-link {{ Request::is('member/dashboard') ? 'active' : '' }}" href="{{ route('customers.dashboard') }}">Beranda</a>
+                        <a class="nav-link {{ Request::routeIs('customers.dashboard') ? 'active' : '' }}" href="{{ route('customers.dashboard') }}">Beranda</a>
                     </li>
-                    <li class="nav-item"><a class="nav-link" href="{{ route('customers.transactions') }}">Transaksi</a></li>
-                    <li class="nav-item"><a class="nav-link" href="{{ route('customers.points.redeem') }}">Tukar Reward</a></li>
+                    <li class="nav-item">
+                        <a class="nav-link {{ Request::routeIs('customers.transactions') ? 'active' : '' }}" href="{{ route('customers.transactions') }}">Transaksi</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {{ Request::routeIs('customers.promos') ? 'active' : '' }}" href="{{ route('customers.promos') }}">Promo</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {{ Request::routeIs('customers.points.redeem') ? 'active' : '' }}" href="{{ route('customers.points.redeem') }}">Tukar Reward</a>
+                    </li>
                 </ul>
 
                 <div class="dropdown">
                     <a href="#" class="d-flex align-items-center text-decoration-none dropdown-toggle text-dark" data-bs-toggle="dropdown">
                         <div class="text-end me-3 d-none d-sm-block">
                             <p class="fw-bold small mb-0 lh-1">{{ auth()->guard('customers')->user()->name }}</p>
-                            <small class="text-muted" style="font-size: 11px">Tier: Gold Member</small>
+                            <small class="text-muted" style="font-size: 11px">
+                                {{ auth()->guard('customers')->user()->rfmScore->segment_name ?? 'New Member' }}
+                            </small>
                         </div>
                         <img src="{{ auth()->guard('customers')->user()->profile_photo ? asset('storage/'.auth()->guard('customers')->user()->profile_photo) : 'https://ui-avatars.com/api/?background=6366f1&color=fff&name='.urlencode(auth()->guard('customers')->user()->name) }}" class="avatar-circle">
                     </a>
                     <ul class="dropdown-menu dropdown-menu-end">
-                        <li><a class="dropdown-item py-2 rounded-3" href="#"><i class="bi bi-person me-2"></i> Profil</a></li>
+                        <li><a class="dropdown-item py-2 rounded-3" href="{{ route('customers.profile') }}"><i class="bi bi-person me-2"></i> Profil</a></li>
                         <li><hr class="dropdown-divider"></li>
                         <li>
                             <form action="{{ route('logout') }}" method="POST">

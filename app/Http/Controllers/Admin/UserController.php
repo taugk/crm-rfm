@@ -126,8 +126,10 @@ class UserController extends Controller
 
     public function myProfile()
     {
-        $user = Auth::user()->id;
-        return view('pages.admin.user.profile', compact('user'));
+        $user = Auth::user();
+        $transactionCount = 0;
+
+        return view('pages.admin.profile.index', compact('user', 'transactionCount'));
     }
 
     /**

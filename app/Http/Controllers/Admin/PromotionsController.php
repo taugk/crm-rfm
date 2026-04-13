@@ -45,7 +45,7 @@ class PromotionsController extends Controller
             'start_date'     => 'required|date',
             'end_date'       => 'required|date|after:start_date',
             'description'    => 'nullable|string',
-            'target_segment' => 'nullable|string|max:255',
+            'target_segment' => 'nullable|in:all,Needs Attention,Champions,Potential Loyalists,At Risk,Loyal Customers',
         ]);
 
         try {
@@ -114,7 +114,7 @@ class PromotionsController extends Controller
             'start_date'     => 'required|date',
             'end_date'       => 'required|date|after:start_date',
             'description'    => 'nullable|string',
-            'target_segment' => 'nullable|string|max:255',
+            'target_segment' => 'nullable|in:all,Needs Attention,Champions,Potential Loyalists,At Risk,Loyal Customers',
         ]);
 
         try {

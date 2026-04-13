@@ -141,15 +141,15 @@
                             <li class="submenu-item {{ is_active('rfm.index*') }}"><a href="{{ route('rfm.index') }}">Analisis RFM</a></li>
                             <hr class="mx-3 my-2" style="opacity: 0.1; border-color: #fff;">
                             <li class="submenu-item {{ is_active('admin.reports.transactions*') }}"><a href="{{ route('admin.reports.transactions') }}">Laporan Penjualan</a></li>
-                            <li class="submenu-item {{ is_active('admin.reports.products*') }}"><a href="{{ route('admin.reports.products') }}">Laporan Produk Terlaris</a></li>
+                            <li class="submenu-item {{ is_active('admin.product.reports*') }}"><a href="{{ route('admin.product.reports') }}">Laporan Produk Terlaris</a></li>
                         </ul>
                     </li>
                 @endif
 
                 {{-- SECTION 5: PENGATURAN (Semua Role) --}}
                 <li class="sidebar-title">Pengaturan</li>
-                <li class="sidebar-item {{ is_active('profil*') }}">
-                    <a href="{{ url('/profil') }}" class="sidebar-link">
+                <li class="sidebar-item {{ is_active('admin.profile*') }}">
+                    <a href="{{ route('admin.profile') }}" class="sidebar-link">
                         <i class="bi bi-person-circle"></i>
                         <span>Profil Saya</span>
                     </a>

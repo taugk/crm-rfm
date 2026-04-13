@@ -202,18 +202,31 @@ class LoginController extends Controller
         ], 422);
     }
 
-    // ===============================
-    // LOGOUT
-    // ===============================
     public function logout(Request $request)
-    {
-        Auth::logout();
+{
+    // Cek apakah yang sedang login adalah Customer
+    $isCustomer = Auth::guard('customers')->check();
+
+    // Proses Logout (Urutan: Guard spesifik dulu, baru sesi umum)
+    if ($isCustomer) {
         Auth::guard('customers')->logout();
-
-        $request->session()->invalidate();
-        $request->session()->regenerateToken();
-
-        return redirect()->route('login')
-            ->with('success', 'Logout berhasil');
+    } else {
+        Auth::logout(); // Default logout untuk Admin/Staff (Guard Web)
     }
+
+    // Bersihkan Sesi
+    $request->session()->invalidate();
+    $request->session()->regenerateToken();
+
+    // Tentukan Tujuan Redirect
+    if ($isCustomer) {
+        // Jika yang logout adalah customer, lempar ke /customer
+        return redirect('/customer')->with('success', 'Logout berhasil');
+    }
+
+    // Jika Admin/Staff, lempar ke login utama (admin)
+    return redirect()->route('login')->with('success', 'Logout berhasil');
+}
+
+
 }

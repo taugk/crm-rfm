@@ -76,14 +76,24 @@
                                 </div>
                             </div>
 
-                            <div class="form-group mb-0">
+                          <div class="form-group mb-0">
                                 <label for="target_segment" class="form-label fw-bold small">TARGET SEGMEN PELANGGAN</label>
                                 <div class="input-group">
                                     <span class="input-group-text bg-light"><i class="bi bi-people"></i></span>
-                                    <input type="text" name="target_segment" id="target_segment" class="form-control" value="{{ old('target_segment') }}" placeholder="Contoh: Member Baru, Pelanggan VIP, atau Semua">
+                                    <select name="target_segment" id="target_segment" class="form-select @error('target_segment') is-invalid @enderror">
+                                        <option value="all" {{ old('target_segment') == 'all' ? 'selected' : '' }}>Semua Pelanggan</option>
+                                        <option value="Needs Attention" {{ old('target_segment') == 'Needs Attention' ? 'selected' : '' }}>Needs Attention</option>
+                                        <option value="Champions" {{ old('target_segment') == 'Champions' ? 'selected' : '' }}>Champions</option>
+                                        <option value="Potential Loyalists" {{ old('target_segment') == 'Potential Loyalists' ? 'selected' : '' }}>Potential Loyalists</option>
+                                        <option value="At Risk" {{ old('target_segment') == 'At Risk' ? 'selected' : '' }}>At Risk</option>
+                                        <option value="Loyal Customers" {{ old('target_segment') == 'Loyal Customers' ? 'selected' : '' }}>Loyal Customers</option>
+                                    </select>
                                 </div>
+                                @error('target_segment')
+                                    <small class="text-danger">{{ $message }}</small>
+                                @enderror
                             </div>
-                        </div>
+                                                    </div>
                     </div>
                 </div>
 

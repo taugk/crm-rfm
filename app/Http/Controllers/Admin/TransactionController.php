@@ -71,57 +71,92 @@ class TransactionController extends Controller
     }
 
     /**
-     * API: Cek Validitas Kode Promo (Digunakan via AJAX di Kasir).
-     */
-    public function checkPromo(Request $request)
-    {
-        $code = $request->query('code');
-        $now = now(); // Berdasarkan Asia/Jakarta
+ * API: Cek Validitas Kode Promo (Digunakan via AJAX di Kasir).
+ * Memvalidasi Kode, Status Aktif, Masa Berlaku, Kuota, Minimal Belanja,
+ * dan Target Segmen berdasarkan data RFM terbaru.
+ */
+public function checkPromo(Request $request)
+{
+    $code = $request->query('code');
+    $customerId = $request->query('customer_id');
+    $subtotal = (float) $request->query('subtotal', 0);
+    $now = now(); // Mengikuti timezone Asia/Jakarta di config/app.php
 
-        $promo = Promotions::where('promo_code', $code)
-            ->where('is_active', true)
-            ->where('start_date', '<=', $now)
-            ->where('end_date', '>=', $now)
-            ->first();
+    // 1. Cari Promo yang Aktif & Dalam Masa Berlaku
+    $promo = Promotions::where('promo_code', $code)
+        ->where('is_active', true)
+        ->where('start_date', '<=', $now)
+        ->where('end_date', '>=', $now)
+        ->first();
 
-        if (!$promo) {
-            return response()->json([
-                'status' => 'error', 
-                'message' => 'Kode promo tidak ditemukan atau sudah kedaluwarsa.'
-            ]);
-        }
-
-        // Cek Kuota Pemakaian
-        if ($promo->usage_limit !== null && $promo->used_count >= $promo->usage_limit) {
-            return response()->json([
-                'status' => 'error', 
-                'message' => 'Maaf, kuota promo ini sudah habis.'
-            ]);
-        }
-
+    // Validasi: Apakah promo ada?
+    if (!$promo) {
         return response()->json([
-            'status' => 'success',
-            'data' => [
-                'id' => $promo->id,
-                'promo_name' => $promo->promo_name,
-                'discount_type' => $promo->discount_type,
-                'discount_value' => (float) $promo->discount_value,
-                'min_spend' => (float) $promo->min_spend,
-            ]
+            'status' => 'error', 
+            'message' => 'Kode promo tidak ditemukan atau sudah kedaluwarsa.'
         ]);
     }
+
+    // 2. Validasi: Kuota Pemakaian
+    if ($promo->usage_limit !== null && $promo->used_count >= $promo->usage_limit) {
+        return response()->json([
+            'status' => 'error', 
+            'message' => 'Maaf, kuota promo ini sudah habis.'
+        ]);
+    }
+
+    // 3. Validasi: Minimal Belanja
+    if ($subtotal < (float) $promo->min_spend) {
+        return response()->json([
+            'status' => 'error', 
+            'message' => 'Minimal belanja untuk promo ini adalah Rp ' . number_format($promo->min_spend, 0, ',', '.')
+        ]);
+    }
+
+    // 4. Validasi: Target Segmen (RFM Check)
+    // Jika target_segment diisi (bukan null) dan bukan 'all'
+    if ($promo->target_segment && $promo->target_segment !== 'all') {
+        
+        // Ambil segmen terbaru pelanggan dari tabel rfm_scores
+        $currentSegment = DB::table('rfm_scores')
+            ->where('customer_id', $customerId)
+            ->latest('created_at')
+            ->value('segment_name');
+
+        // Jika segmen tidak cocok atau pelanggan belum punya skor RFM
+        if (!$currentSegment || $currentSegment !== $promo->target_segment) {
+            $userSegment = $currentSegment ?? 'Uncategorized (Member Baru)';
+            return response()->json([
+                'status' => 'error', 
+                'message' => "Promo ini khusus untuk segmen '{$promo->target_segment}'. Segmen pelanggan saat ini: {$userSegment}."
+            ]);
+        }
+    }
+
+    // 5. Jika lolos semua validasi, kirim data promo ke front-end
+    return response()->json([
+        'status' => 'success',
+        'message' => 'Kode promo berhasil dipasang!',
+        'data' => [
+            'id' => $promo->id,
+            'promo_name' => $promo->promo_name,
+            'discount_type' => $promo->discount_type,
+            'discount_value' => (float) $promo->discount_value,
+            'min_spend' => (float) $promo->min_spend,
+            'target_segment' => $promo->target_segment,
+        ]
+    ]);
+}
 
     /**
      * Menyimpan transaksi baru.
      */
-    public function store(Request $request)
+    /**
+ * Menyimpan transaksi baru dengan integrasi Promo dan Loyalty Point.
+ */
+public function store(Request $request)
 {
-    // Log 1: Pantau data yang masuk dari view
-    Log::info('POS Transaction Start', [
-        'invoice' => $request->invoice_number,
-        'payload' => $request->all()
-    ]);
-
+    // 1. Validasi Input Dasar
     $request->validate([
         'invoice_number' => 'required|unique:transactions,invoice_number',
         'payment_method' => 'required',
@@ -133,10 +168,9 @@ class TransactionController extends Controller
     DB::beginTransaction();
 
     try {
-        // 1. Handling Customer
+        // 2. Handling Customer (Walk-in vs Member)
         $customerId = $request->customer_id;
         if ($customerId == 1 && $request->filled('walkin_name')) {
-            Log::debug('Processing Walk-in Customer', ['name' => $request->walkin_name]);
             $newCustomer = Customers::create([
                 'name'   => $request->walkin_name,
                 'type'   => 'walk in',
@@ -146,30 +180,23 @@ class TransactionController extends Controller
             $customerId = $newCustomer->id;
         }
 
-        // 2. Simpan Header Transaksi
-        Log::debug('Creating Transaction Header', [
-            'promotion_id' => $request->promotion_id,
-            'discount' => $request->discount_amount
-        ]);
-
+        // 3. Simpan Header Transaksi
         $transaction = Transaction::create([
             'invoice_number'   => $request->invoice_number,
             'customer_id'      => $customerId,
             'promotion_id'     => $request->promotion_id,
             'discount_amount'  => $request->discount_amount ?? 0,
             'subtotal'         => $request->subtotal,
-            'tax_total'        => $request->tax_total,
+            'tax_total'        => $request->tax_total ?? 0,
             'total_price'      => $request->total_price,
             'status'           => 'completed', 
             'payment_method'   => $request->payment_method,
-            'notes'            => $request->customer_id == 1 ? "Walk-in: " . $request->walkin_name : null,
+            'notes'            => $request->notes,
             'transaction_date' => now(),
         ]);
 
-        // 3. Simpan Detail Transaksi & Potong Stok
-        foreach ($request->items as $index => $item) {
-            Log::debug("Processing Item #{$index}", ['product_detail_id' => $item['product_detail_id']]);
-            
+        // 4. Simpan Detail Transaksi & Potong Stok
+        foreach ($request->items as $item) {
             TransactionDetail::create([
                 'transaction_id'    => $transaction->id,
                 'product_detail_id' => $item['product_detail_id'],
@@ -178,64 +205,34 @@ class TransactionController extends Controller
                 'subtotal'          => $item['qty'] * $item['price'],
             ]);
 
-            $product = ProductDetail::find($item['product_detail_id']);
-            if ($product) {
-                $oldStock = $product->stock;
-                $product->decrement('stock', $item['qty']);
-                Log::debug("Stock Updated for Product ID: {$product->id}", [
-                    'before' => $oldStock, 
-                    'after' => $product->fresh()->stock
-                ]);
-            }
+            // Potong Stok
+            ProductDetail::where('id', $item['product_detail_id'])->decrement('stock', $item['qty']);
         }
 
-        // 4. Update Kuota Promo
+        // 5. Integrasi Promo: Validasi Segment & Update Kuota
         if ($request->filled('promotion_id')) {
-            $promo = Promotions::find($request->promotion_id);
-            if ($promo) {
-                $promo->increment('used_count');
-                Log::info('Promotion Applied & Usage Incremented', [
-                    'promo_code' => $promo->promo_code,
-                    'new_used_count' => $promo->fresh()->used_count
-                ]);
-            }
+            $this->applyPromotionInternal($request->promotion_id, $customerId);
         }
 
-        // 5. Update Poin Member
-        $customer = Customers::find($customerId);
-        if ($customer && $customer->type === 'member') {
-            $points = floor($request->total_price / 1000); 
-            $customer->increment('total_points', $points);
-            $customer->update(['last_purchase_at' => now()]);
-            
-            Log::info('Member Points Awarded', [
-                'customer' => $customer->name,
-                'points_added' => $points,
-                'total_points' => $customer->fresh()->total_points
-            ]);
-        }
+        // 6. Integrasi Loyalty: Proses Poin (Hanya Member)
+        $this->processLoyaltyPoints($transaction, $customerId);
 
         DB::commit();
-        Log::info('Transaction Successfully Committed', ['invoice' => $request->invoice_number]);
         
+        Log::info("Transaction Success: {$transaction->invoice_number}");
         return back()->with('success', 'Transaksi #' . $request->invoice_number . ' Berhasil!');
 
     } catch (\Exception $e) {
         DB::rollBack();
         
-        // Log Error Fatal
-        Log::error('FATAL TRANSACTION FAILURE', [
+        Log::error('Transaction Failed', [
             'invoice' => $request->invoice_number,
-            'error_message' => $e->getMessage(),
-            'file' => $e->getFile(),
-            'line' => $e->getLine(),
-            'trace' => $e->getTraceAsString()
+            'error'   => $e->getMessage()
         ]);
 
-        return back()->with('error', 'Gagal Simpan Transaksi: ' . $e->getMessage())->withInput();
+        return back()->with('error', 'Gagal: ' . $e->getMessage())->withInput();
     }
 }
-
     /**
      * Menampilkan detail transaksi.
      */
@@ -297,4 +294,79 @@ class TransactionController extends Controller
                 ->with('error', 'Import gagal: ' . $e->getMessage());
         }
     }
+
+    /**
+ * Memproses poin loyalty hanya untuk tipe 'member'
+ */
+/**
+ * Validasi Internal Promo: Cek Kuota & Target Segment.
+ */
+private function applyPromotionInternal($promoId, $customerId)
+{
+    $promo = Promotions::lockForUpdate()->find($promoId);
+    if (!$promo) return;
+
+    // 1. Validasi Target Segment via RFM
+    if ($promo->target_segment && $promo->target_segment !== 'all') {
+        // Query langsung ke tabel rfm_scores untuk data terbaru
+        $currentSegment = DB::table('rfm_scores')
+            ->where('customer_id', $customerId)
+            ->latest('created_at')
+            ->value('segment_name');
+
+        if ($currentSegment !== $promo->target_segment) {
+            throw new \Exception("Transaksi ditolak: Segmen pelanggan (" . ($currentSegment ?? 'Uncategorized') . ") tidak sesuai dengan target promo ({$promo->target_segment}).");
+        }
+    }
+
+    // 2. Validasi Kuota
+    if ($promo->usage_limit !== null && $promo->used_count >= $promo->usage_limit) {
+        throw new \Exception("Kuota promo habis.");
+    }
+
+    $promo->increment('used_count');
+}
+
+/**
+ * Menghitung dan mencatat poin loyalty.
+ * Hanya berlaku jika customer bertipe 'member'.
+ */
+private function processLoyaltyPoints($transaction, $customerId)
+{
+    $customer = Customers::find($customerId);
+
+    // Filter: Hanya tipe 'member' yang mendapat poin
+    if (!$customer || $customer->type !== 'member') {
+        return;
+    }
+
+    // Ambil aturan poin aktif berdasarkan nominal belanja terkecil yang terpenuhi
+    $rule = \App\Models\LoyaltyRule::where('is_active', true)
+                ->where('min_purchase', '<=', $transaction->total_price)
+                ->orderBy('min_purchase', 'desc')
+                ->first();
+
+    if ($rule) {
+        // Hitung kelipatan poin
+        $multiplier = floor($transaction->total_price / $rule->min_purchase);
+        $pointsToAdd = $multiplier * $rule->points_earned;
+
+        if ($pointsToAdd > 0) {
+            // 1. Update total poin di master customer
+            $customer->increment('total_points', $pointsToAdd);
+            $customer->update(['last_purchase_at' => now()]);
+
+            // 2. Catat riwayat detail ke tabel loyalty_points
+            \App\Models\LoyaltyPoints::create([
+                'customer_id'    => $customer->id,
+                'transaction_id' => $transaction->id,
+                'amount'         => $pointsToAdd,
+                'description'    => "Poin dari transaksi #" . $transaction->invoice_number,
+                'type'           => 'earn'
+            ]);
+
+            Log::debug("Points Awarded: {$pointsToAdd} to Customer ID {$customer->id}");
+        }
+    }
+}
 }

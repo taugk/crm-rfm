@@ -41,8 +41,24 @@ Route::post('/otp/verify', [LoginController::class, 'verifyOtp'])->name('otp.ver
 */
 Route::middleware(['auth:customers'])->prefix('/customer')->group(function () {
     Route::get('/dashboard', [CustomersController::class, 'index'])->name('customers.dashboard');
+    Route::get('/menu', [CustomersController::class, 'menu'])->name('customers.menu');
     Route::get('/transactions', [CustomersController::class, 'transactions'])->name('customers.transactions');
-    Route::get('/redeem-point', [CustomersController::class, 'redeem'])->name('customers.points.redeem');
+    Route::get('/transactions/detail/{id}', [CustomersController::class, 'transactionShow'])->name('customers.show.transactions');
+    Route::get('/redeem-point', [CustomersController::class, 'rewards'])->name('customers.points.redeem');
+    Route::post('/redeem-point', [CustomersController::class, 'redeem'])->name('customers.points.redeem.process');
+    Route::get('/promo', [CustomersController::class, 'promotions'])->name('customers.promos');
+
+    // --- BAGIAN PROFIL (PERBAIKAN) ---
+    // Hapus {id} karena kita pakai Auth::guard('customers')->user()
+    Route::get('/profile', [CustomersController::class, 'profile'])->name('customers.profile');
+    
+    // Samakan as/name agar konsisten dengan view (customers.profile.update)
+    Route::post('/profile/update', [CustomersController::class, 'updateProfile'])->name('customers.profile.update');
+    
+    // Samakan as/name agar konsisten dengan view (customers.password.update)
+    Route::put('/profile/password', [CustomersController::class, 'updatePassword'])->name('customers.password.update');
+
+    Route::post('/logout', [LoginController::class, 'logout'])->name('customers.logout');
 });
 
 /*
@@ -204,7 +220,13 @@ Route::middleware(['auth:web', 'role:admin'])->prefix('admin')->group(function (
     Route::controller(ReportsController::class)->group(function () {
         Route::get('/reports/transactions', 'index')->name('admin.reports.transactions');
         Route::get('/reports/transactions/detail/{id}', 'show')->name('admin.reports.transactions.detail');
+        Route::get('/reports/product', [ProductController::class, 'productReports'])->name('admin.product.reports');
     });
+
+    // profil
+    Route::get('/myProfile', [UserController::class, 'myProfile'])->name('admin.profile');
+
+    
 });
 
 Route::middleware(['auth', 'role:admin,manager'])->prefix('rfm')->name('rfm.')->group(function () {

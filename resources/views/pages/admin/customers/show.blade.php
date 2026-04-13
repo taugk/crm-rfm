@@ -89,7 +89,7 @@
                         </div>
                         <div class="col-md-8 col-lg-12 col-xl-12 col-xxl-7">
                             <h6 class="text-muted font-semibold small uppercase">Total Spending</h6>
-                            <h5 class="font-extrabold mb-0 small">Rp{{ number_format($customer->transactions->sum('payable_amount')) }}</h5>
+                            <h5 class="font-extrabold mb-0 small">Rp{{ number_format($customer->transactions->sum('subtotal')) }}</h5>
                         </div>
                     </div>
                 </div>
@@ -189,7 +189,7 @@
                                             <td class="fw-bold">{{ $trx->invoice_number }}</td>
                                             <td>{{ $trx->created_at->format('d/m/y H:i') }}</td>
                                             <td><span class="badge bg-light-secondary text-dark">{{ strtoupper($trx->payment_method) }}</span></td>
-                                            <td class="text-end fw-bold">Rp{{ number_format($trx->payable_amount) }}</td>
+                                            <td class="text-end fw-bold">Rp{{ number_format($trx->subtotal) }}</td>
                                             <td class="text-center">
                                                 <a href="#" class="btn btn-sm btn-outline-primary rounded-pill px-3">Detail</a>
                                             </td>
