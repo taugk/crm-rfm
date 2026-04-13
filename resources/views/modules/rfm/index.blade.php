@@ -11,7 +11,6 @@
         font-size: 11px; font-weight: 700; white-space: nowrap;
         text-transform: uppercase; letter-spacing: 0.5px;
     }
-    /* Mazer-friendly soft colors */
     .seg-champions  { background: #e0e7ff; color: #435ebe; }
     .seg-loyal      { background: #d1fae5; color: #065f46; }
     .seg-potential  { background: #fef3c7; color: #92400e; }
@@ -23,6 +22,12 @@
     .stats-icon.purple { background-color: #435ebe; }
     .stats-icon.red { background-color: #ff7976; }
     .stats-icon.green { background-color: #5ddab4; }
+    
+    .table-sm-custom td, .table-sm-custom th {
+        padding: 0.4rem;
+        font-size: 0.85rem;
+    }
+    .bg-light-blue { background-color: #f0f5ff; }
 </style>
 @endpush
 
@@ -32,21 +37,12 @@
         <div class="row">
             <div class="col-12 col-md-6 order-md-1 order-last">
                 <h3>Analisis RFM & Segmentasi</h3>
-                <p class="text-subtitle text-muted">Segmentasi pelanggan menggunakan algoritma K-Means Clustering.</p>
-            </div>
-            <div class="col-12 col-md-6 order-md-2 order-first">
-                <nav aria-label="breadcrumb" class="breadcrumb-header float-start float-lg-end">
-                    <ol class="breadcrumb">
-                        <li class="breadcrumb-item"><a href="{{ route('admin.dashboard') }}">Dashboard</a></li>
-                        <li class="breadcrumb-item active" aria-current="page">Analisis RFM</li>
-                    </ol>
-                </nav>
+                <p class="text-subtitle text-muted">Data mentah vs Normalisasi K-Means.</p>
             </div>
         </div>
     </div>
 
     <section class="section">
-        {{-- Toolbar --}}
         <div class="d-flex justify-content-end mb-3">
             <a href="{{ route('rfm.calculate') }}" class="btn btn-primary shadow-sm">
                 <i class="bi bi-cpu-fill me-2"></i> Hitung Ulang & Sinkronisasi
@@ -54,43 +50,22 @@
         </div>
 
         @if(!$latestBatch)
-        <div class="card">
-            <div class="card-body text-center py-5">
-                <div class="avatar avatar-xl bg-light-primary mb-3">
-                    <i class="bi bi-info-circle-fill text-primary" style="font-size: 2rem;"></i>
-                </div>
-                <h5>Belum ada data kalkulasi</h5>
-                <p class="text-muted">Sistem memerlukan proses kalkulasi awal untuk menghasilkan segmen pelanggan.</p>
-            </div>
-        </div>
+            <div class="card"><div class="card-body text-center py-5"><h5>Belum ada data kalkulasi</h5></div></div>
         @else
 
         {{-- Summary Cards --}}
         <div class="row">
             @foreach($segmentStats as $seg)
-            <div class="col-6 col-lg-3 col-md-6">
+            <div class="col-6 col-lg-3">
                 <div class="card shadow-sm">
-                    <div class="card-body px-4 py-4-5">
-                        <div class="row">
-                            <div class="col-md-4 col-lg-12 col-xl-12 col-xxl-5 d-flex justify-content-start">
-                                <div class="stats-icon mb-2 {{ $loop->first ? 'purple' : ($loop->last ? 'red' : 'green') }}">
-                                    <i class="bi bi-people-fill"></i>
-                                </div>
+                    <div class="card-body p-3">
+                        <div class="d-flex align-items-center">
+                            <div class="stats-icon mb-2 {{ $loop->first ? 'purple' : 'green' }} me-3">
+                                <i class="bi bi-people-fill"></i>
                             </div>
-                            <div class="col-md-8 col-lg-12 col-xl-12 col-xxl-7">
-                                <h6 class="text-muted font-semibold" style="font-size: 0.8rem;">{{ $seg->segment_name }}</h6>
-                                <h6 class="font-extrabold mb-0">{{ number_format($seg->total) }}</h6>
-                                <span class="badge bg-light-secondary mt-2" style="font-size: 0.6rem;">Cluster {{ $seg->cluster_id }}</span>
-                            </div>
-                        </div>
-                        <div class="mt-3 pt-3 border-top" style="font-size: 0.75rem;">
-                            <div class="d-flex justify-content-between">
-                                <span class="text-muted">Avg Score:</span>
-                                <span class="fw-bold text-primary">{{ $seg->avg_rfm }}</span>
-                            </div>
-                            <div class="d-flex justify-content-between">
-                                <span class="text-muted">Avg Spend:</span>
-                                <span class="fw-bold text-success">Rp {{ number_format($seg->avg_monetary / 1000, 0) }}k</span>
+                            <div>
+                                <h6 class="text-muted font-semibold small mb-0">{{ $seg->segment_name }}</h6>
+                                <h5 class="font-extrabold mb-0">{{ number_format($seg->total) }}</h5>
                             </div>
                         </div>
                     </div>
@@ -103,106 +78,77 @@
             {{-- Scatter Plot --}}
             <div class="col-12 col-xl-7">
                 <div class="card shadow-sm">
-                    <div class="card-header d-flex justify-content-between align-items-center">
-                        <h4>Visualisasi Cluster</h4>
+                    <div class="card-header d-flex justify-content-between">
+                        <h4>Visualisasi Distribusi Cluster</h4>
                         <div class="btn-group" id="axisToggle">
                             <button class="btn btn-sm btn-outline-primary active" data-x="recency_norm" data-y="frequency_norm">R vs F</button>
                             <button class="btn btn-sm btn-outline-primary" data-x="frequency_norm" data-y="monetary_norm">F vs M</button>
-                            <button class="btn btn-sm btn-outline-primary" data-x="recency_norm" data-y="monetary_norm">R vs M</button>
                         </div>
                     </div>
                     <div class="card-body">
-                        <div style="height: 400px;">
-                            <canvas id="scatterChart"></canvas>
-                        </div>
+                        <div style="height: 350px;"><canvas id="scatterChart"></canvas></div>
                     </div>
                 </div>
             </div>
 
-            {{-- Batch Info --}}
+            {{-- Radar Chart: Pola DNA Cluster --}}
             <div class="col-12 col-xl-5">
                 <div class="card shadow-sm h-100">
-                    <div class="card-header">
-                        <h4>Batch Terakhir</h4>
-                    </div>
-                    <div class="card-body">
-                        <ul class="list-group list-group-flush">
-                            <li class="list-group-item d-flex justify-content-between align-items-center px-0">
-                                <span>Waktu Eksekusi</span>
-                                <span class="fw-bold">{{ $latestBatch->created_at->format('d M Y, H:i') }}</span>
-                            </li>
-                            <li class="list-group-item d-flex justify-content-between align-items-center px-0">
-                                <span>Total Data Pelanggan</span>
-                                <span class="fw-bold">{{ $latestBatch->total_customers }}</span>
-                            </li>
-                            <li class="list-group-item d-flex justify-content-between align-items-center px-0">
-                                <span>Iterasi K-Means</span>
-                                <span class="badge bg-light-primary rounded-pill">{{ $latestBatch->actual_iterations }} / 100</span>
-                            </li>
-                            <li class="list-group-item d-flex justify-content-between align-items-center px-0">
-                                <span>Inertia (SSE)</span>
-                                <span class="text-muted">{{ number_format($latestBatch->inertia, 4) }}</span>
-                            </li>
-                            <li class="list-group-item d-flex justify-content-between align-items-center px-0">
-                                <span>Durasi Proses</span>
-                                <span class="text-success fw-bold">{{ $latestBatch->duration_ms }} ms</span>
-                            </li>
-                        </ul>
-                        <div class="alert alert-light-primary mt-4">
-                            <i class="bi bi-shield-check me-2"></i>
-                            Data ini digunakan untuk menentukan target promosi pada modul CRM.
+                    <div class="card-header"><h4>Pola Karakteristik (DNA)</h4></div>
+                    <div class="card-body text-center">
+                        <div style="height: 250px;"><canvas id="radarChart"></canvas></div>
+                        <div class="table-responsive mt-3">
+                            <table class="table table-sm-custom table-bordered">
+                                <thead class="bg-light">
+                                    <tr>
+                                        <th>Cluster</th>
+                                        <th>R_Avg</th>
+                                        <th>F_Avg</th>
+                                        <th>M_Avg</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach($latestBatch->final_centroids ?? [] as $idx => $center)
+                                    <tr>
+                                        <td><span class="badge bg-primary">C-{{ $idx }}</span></td>
+                                        <td>{{ number_format($center[0], 2) }}</td>
+                                        <td>{{ number_format($center[1], 2) }}</td>
+                                        <td>{{ number_format($center[2], 2) }}</td>
+                                    </tr>
+                                    @endforeach
+                                </tbody>
+                            </table>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
 
-        {{-- Table Card --}}
-        <div class="card shadow-sm">
-            <div class="card-header d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3">
-                <h4>Detail Skor Pelanggan</h4>
-                <div class="card-header-action">
-                    <form method="GET" class="d-flex gap-2">
-                        <select name="segment" class="form-select form-select-sm" onchange="this.form.submit()">
-                            <option value="">Semua Segmen</option>
-                            @foreach($segmentStats as $seg)
-                            <option value="{{ $seg->segment_name }}" {{ request('segment') == $seg->segment_name ? 'selected' : '' }}>
-                                {{ $seg->segment_name }}
-                            </option>
-                            @endforeach
-                        </select>
-                        <input type="text" name="search" class="form-control form-control-sm" placeholder="Cari..." value="{{ request('search') }}">
-                        <button class="btn btn-sm btn-primary"><i class="bi bi-search"></i></button>
-                    </form>
-                </div>
-            </div>
+        {{-- Main Data Table --}}
+        <div class="card shadow-sm mt-4">
+            <div class="card-header"><h4>Detail Perhitungan Pelanggan</h4></div>
             <div class="card-body">
                 <div class="table-responsive">
                     <table class="table table-hover table-lg">
                         <thead>
-                            <tr>
-                                <th>Pelanggan</th>
-                                <th>Segmen</th>
-                                <th class="text-center">R</th>
-                                <th class="text-center">F</th>
-                                <th class="text-center">M</th>
-                                <th class="text-center">Total Score</th>
-                                <th>Histori</th>
+                            <tr class="text-center align-middle">
+                                <th rowspan="2" class="text-start">Pelanggan</th>
+                                <th rowspan="2">Segmen</th>
+                                <th colspan="3" class="bg-light">Data Mentah (Actual)</th>
+                                <th colspan="3" class="bg-light-blue">Normalisasi (Input)</th>
+                                <th rowspan="2">Score</th>
+                            </tr>
+                            <tr class="text-center small">
+                                <th class="bg-light">Recency</th><th class="bg-light">Freq</th><th class="bg-light">Monetary</th>
+                                <th class="bg-light-blue">R_Norm</th><th class="bg-light-blue">F_Norm</th><th class="bg-light-blue">M_Norm</th>
                             </tr>
                         </thead>
                         <tbody>
                             @foreach($scores as $score)
-                            <tr>
-                                <td class="col-3">
-                                    <div class="d-flex align-items-center">
-                                        <div class="avatar avatar-md bg-light-primary me-3">
-                                            <span class="avatar-content">{{ strtoupper(substr($score->customer->name, 0, 1)) }}</span>
-                                        </div>
-                                        <div>
-                                            <p class="font-bold mb-0" style="font-size: 0.9rem;">{{ $score->customer->name }}</p>
-                                            <p class="text-muted mb-0" style="font-size: 0.8rem;">{{ $score->customer->email }}</p>
-                                        </div>
-                                    </div>
+                            <tr class="align-middle">
+                                <td>
+                                    <span class="font-bold d-block" style="font-size: 0.9rem;">{{ $score->customer->name }}</span>
+                                    <small class="text-muted">{{ $score->customer->email }}</small>
                                 </td>
                                 <td>
                                     @php
@@ -210,21 +156,21 @@
                                             str_contains($score->segment_name, 'Champion') => 'seg-champions',
                                             str_contains($score->segment_name, 'Loyal')    => 'seg-loyal',
                                             str_contains($score->segment_name, 'At Risk')  => 'seg-at-risk',
-                                            str_contains($score->segment_name, 'Lost')     => 'seg-lost',
-                                            default                                        => 'seg-default',
+                                            default => 'seg-default',
                                         };
                                     @endphp
                                     <span class="segment-badge {{ $segClass }}">{{ $score->segment_name }}</span>
                                 </td>
-                                <td class="text-center"><span class="badge bg-light-primary text-primary">{{ $score->r_score }}</span></td>
-                                <td class="text-center"><span class="badge bg-light-success text-success">{{ $score->f_score }}</span></td>
-                                <td class="text-center"><span class="badge bg-light-warning text-warning">{{ $score->m_score }}</span></td>
-                                <td class="text-center fw-bold">{{ $score->rfm_score }}</td>
-                                <td>
-                                    <a href="{{ route('rfm.customer.history', $score->customer_id) }}" class="btn btn-sm btn-outline-secondary rounded-pill">
-                                        <i class="bi bi-clock-history"></i>
-                                    </a>
-                                </td>
+                                {{-- Raw Data --}}
+                                <td class="text-center small">{{ $score->recency_days }}d</td>
+                                <td class="text-center small">{{ $score->frequency }}x</td>
+                                <td class="text-center small">Rp{{ number_format($score->monetary/1000) }}k</td>
+                                {{-- Normalized Data --}}
+                                <td class="text-center text-primary fw-bold small">{{ number_format($score->recency_norm, 2) }}</td>
+                                <td class="text-center text-primary fw-bold small">{{ number_format($score->frequency_norm, 2) }}</td>
+                                <td class="text-center text-primary fw-bold small">{{ number_format($score->monetary_norm, 2) }}</td>
+                                
+                                <td class="text-center fw-extrabold text-dark">{{ $score->rfm_score }}</td>
                             </tr>
                             @endforeach
                         </tbody>
@@ -243,59 +189,73 @@
 @push('scripts')
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script>
-    const COLORS = ['#435ebe', '#5ddab4', '#ff7976', '#57caeb', '#ffc107', '#6c757d', '#343a40', '#007bff'];
-
-    let scatterChart;
+    const COLORS = ['#435ebe', '#5ddab4', '#ff7976', '#57caeb', '#ffc107', '#6c757d'];
     const scatterData = @json($scatterData);
-    let currentX = 'recency_norm', currentY = 'frequency_norm';
+    const centroidData = @json($latestBatch->final_centroids ?? []);
+    const clusterLabels = @json($latestBatch->cluster_labels ?? []);
 
-    function buildDatasets(xKey, yKey) {
-        const grouped = {};
-        scatterData.forEach(d => {
-            const key = d.segment_name;
-            if (!grouped[key]) grouped[key] = { label: key, data: [], cluster_id: d.cluster_id };
-            grouped[key].data.push({ x: d[xKey], y: d[yKey] });
+    // 1. Render Radar Chart (Patterns)
+    if (centroidData.length > 0) {
+        new Chart(document.getElementById('radarChart'), {
+            type: 'radar',
+            data: {
+                labels: ['Recency', 'Frequency', 'Monetary'],
+                datasets: centroidData.map((center, i) => ({
+                    label: clusterLabels[i] || `Cluster ${i}`,
+                    data: center,
+                    borderColor: COLORS[i % COLORS.length],
+                    backgroundColor: COLORS[i % COLORS.length] + '22',
+                    borderWidth: 2
+                }))
+            },
+            options: { 
+                responsive: true, maintainAspectRatio: false,
+                scales: { r: { beginAtZero: true, max: 1, ticks: { display: false } } },
+                plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 10 } } } }
+            }
         });
-        return Object.values(grouped).map((g, i) => ({
-            label: g.label,
-            data: g.data,
-            backgroundColor: COLORS[g.cluster_id % COLORS.length] + 'BB',
-            pointRadius: 6,
-            pointHoverRadius: 9,
-        }));
     }
 
+    // 2. Render Scatter Plot
+    let scatterChart;
     function renderScatter(xKey, yKey) {
         const ctx = document.getElementById('scatterChart').getContext('2d');
         if (scatterChart) scatterChart.destroy();
+
+        const grouped = {};
+        scatterData.forEach(d => {
+            if (!grouped[d.segment_name]) grouped[d.segment_name] = { label: d.segment_name, data: [], cid: d.cluster_id };
+            grouped[d.segment_name].data.push({ x: d[xKey], y: d[yKey] });
+        });
+
         scatterChart = new Chart(ctx, {
             type: 'scatter',
-            data: { datasets: buildDatasets(xKey, yKey) },
+            data: {
+                datasets: Object.values(grouped).map(g => ({
+                    label: g.label,
+                    data: g.data,
+                    backgroundColor: COLORS[g.cid % COLORS.length] + 'BB'
+                }))
+            },
             options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: { position: 'bottom', labels: { usePointStyle: true, boxWidth: 6, font: { size: 11, family: 'Nunito' } } }
-                },
-                scales: {
-                    x: { grid: { display: false }, title: { display: true, text: 'Normalisasi (X)' } },
-                    y: { grid: { color: '#f1f1f1' }, title: { display: true, text: 'Normalisasi (Y)' } }
+                responsive: true, maintainAspectRatio: false,
+                scales: { 
+                    x: { title: { display: true, text: 'Nilai Normalisasi X' }, min: 0, max: 1 },
+                    y: { title: { display: true, text: 'Nilai Normalisasi Y' }, min: 0, max: 1 }
                 }
             }
         });
     }
 
     document.addEventListener('DOMContentLoaded', () => {
-        if(document.getElementById('scatterChart')) {
-            renderScatter(currentX, currentY);
-            document.querySelectorAll('#axisToggle button').forEach(btn => {
-                btn.addEventListener('click', function() {
-                    document.querySelectorAll('#axisToggle button').forEach(b => b.classList.remove('active'));
-                    this.classList.add('active');
-                    renderScatter(this.dataset.x, this.dataset.y);
-                });
+        renderScatter('recency_norm', 'frequency_norm');
+        document.querySelectorAll('#axisToggle button').forEach(btn => {
+            btn.addEventListener('click', function() {
+                document.querySelectorAll('#axisToggle button').forEach(b => b.classList.remove('active'));
+                this.classList.add('active');
+                renderScatter(this.dataset.x, this.dataset.y);
             });
-        }
+        });
     });
 </script>
 @endpush
