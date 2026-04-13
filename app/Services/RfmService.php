@@ -2,30 +2,96 @@
 
 namespace App\Services;
 
-use App\Models\Customers;
 use App\Models\RfmCalculationBatch;
 use App\Models\RfmScore;
 use App\Models\RfmSegmentHistory;
-use App\Models\Transaction;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 class RfmService
 {
+
+    // =========================================================================
+    // Helper: unified logger ke channel 'rfm'
+    // =========================================================================
+
     /**
-     * Entry point: jalankan seluruh pipeline RFM + K-Means.
-     * Mengembalikan batch yang sudah completed beserta steps log.
+     * Tulis debug log ke channel 'rfm'.
+     * Format: [RFM][batch:{batchId}][step:{step}] message | context
      */
+    private function dbg(string $step, string $message, array $context = [], ?int $batchId = null): void
+    {
+        $prefix = '[RFM]';
+        if ($batchId !== null) $prefix .= "[batch:{$batchId}]";
+        $prefix .= "[{$step}]";
+
+        Log::channel('rfm')->debug("{$prefix} {$message}", $context);
+    }
+
+    private function info(string $step, string $message, array $context = [], ?int $batchId = null): void
+    {
+        $prefix = '[RFM]';
+        if ($batchId !== null) $prefix .= "[batch:{$batchId}]";
+        $prefix .= "[{$step}]";
+
+        Log::channel('rfm')->info("{$prefix} {$message}", $context);
+    }
+
+    private function warn(string $step, string $message, array $context = [], ?int $batchId = null): void
+    {
+        $prefix = '[RFM]';
+        if ($batchId !== null) $prefix .= "[batch:{$batchId}]";
+        $prefix .= "[{$step}]";
+
+        Log::channel('rfm')->warning("{$prefix} {$message}", $context);
+    }
+
+    private function err(string $step, string $message, array $context = [], ?int $batchId = null): void
+    {
+        $prefix = '[RFM]';
+        if ($batchId !== null) $prefix .= "[batch:{$batchId}]";
+        $prefix .= "[{$step}]";
+
+        Log::channel('rfm')->error("{$prefix} {$message}", $context);
+    }
+
+    /** Kembalikan microtime float */
+    private function timer(): float
+    {
+        return microtime(true);
+    }
+
+    /** Format durasi dalam ms */
+    private function elapsed(float $start): string
+    {
+        return round((microtime(true) - $start) * 1000, 2) . ' ms';
+    }
+
+
+    // =========================================================================
+    // ENTRY POINT
+    // =========================================================================
+
     public function calculate(int $userId, int $kClusters, ?Carbon $from = null, ?Carbon $to = null): array
     {
         $startTime = microtime(true);
-        $steps = [];   // Log tiap langkah untuk ditampilkan di UI
+        $steps = [];
 
         $to   = $to   ?? Carbon::now();
         $from = $from ?? Carbon::now()->subYears(2);
 
+        // -------------------------------------------------------------------
+        Log::channel('rfm')->info('[RFM][calculate] ===== KALKULASI DIMULAI =====', [
+            'user_id'    => $userId,
+            'k_clusters' => $kClusters,
+            'from'       => $from->toDateString(),
+            'to'         => $to->toDateString(),
+        ]);
+        // -------------------------------------------------------------------
+
         // --- Buat batch record ---
+        $t = $this->timer();
         $batch = RfmCalculationBatch::create([
             'triggered_by'     => $userId,
             'k_clusters'       => $kClusters,
@@ -37,11 +103,16 @@ class RfmService
             'status'           => 'running',
         ]);
 
+        $this->info('init', 'Batch record dibuat', [
+            'batch_id'   => $batch->id,
+            'elapsed'    => $this->elapsed($t),
+        ], $batch->id);
+
         try {
             // ================================================================
-            // STEP 1 — Ambil raw data transaksi per pelanggan
+            // STEP 1
             // ================================================================
-            $rawData    = collect(); 
+            $rawData    = collect();
             $scored     = collect();
             $normalized = collect();
             $normStats  = [];
@@ -52,38 +123,129 @@ class RfmService
             $clusterLabels = [];
             $savedCount = 0;
 
+            $t1 = $this->timer();
+            $this->dbg('step1', 'Mulai pengambilan raw data', [], $batch->id);
+
             $steps[] = $this->stepRawData($rawData, $from, $to);
 
+            $this->info('step1', 'Raw data selesai diambil', [
+                'total_rows' => $rawData->count(),
+                'elapsed'    => $this->elapsed($t1),
+            ], $batch->id);
+
             if ($rawData->isEmpty()) {
+                $this->err('step1', 'Tidak ada data transaksi — pipeline dihentikan', [
+                    'from' => $from->toDateString(),
+                    'to'   => $to->toDateString(),
+                ], $batch->id);
                 throw new \RuntimeException('Tidak ada data transaksi dalam rentang tanggal yang dipilih.');
             }
+
+            // Log sampel 3 baris raw data (hindari dump besar di production)
+            $this->dbg('step1', 'Sampel raw data (maks 3 baris)', [
+                'sample' => $rawData->take(3)->toArray(),
+            ], $batch->id);
 
             $batch->update(['total_customers' => $rawData->count()]);
 
             // ================================================================
-            // STEP 2 — Hitung skor quintile R, F, M (1–5)
+            // STEP 2
             // ================================================================
+            $t2 = $this->timer();
+            $this->dbg('step2', 'Mulai scoring quintile', [], $batch->id);
+
             $steps[] = $this->stepQuintile($rawData, $scored);
 
+            $this->info('step2', 'Quintile scoring selesai', [
+                'total_scored' => $scored->count(),
+                'elapsed'      => $this->elapsed($t2),
+                'distribution' => [
+                    'r' => $this->scoreDistribution($scored, 'r_score'),
+                    'f' => $this->scoreDistribution($scored, 'f_score'),
+                    'm' => $this->scoreDistribution($scored, 'm_score'),
+                ],
+            ], $batch->id);
+
+            $this->dbg('step2', 'Sampel scored data (maks 3 baris)', [
+                'sample' => $scored->take(3)->map(fn($r) => [
+                    'customer_id' => $r->customer_id,
+                    'r_score'     => $r->r_score,
+                    'f_score'     => $r->f_score,
+                    'm_score'     => $r->m_score,
+                    'rfm_score'   => $r->rfm_score,
+                ])->values()->toArray(),
+            ], $batch->id);
+
             // ================================================================
-            // STEP 3 — Min-Max normalization untuk K-Means
+            // STEP 3
             // ================================================================
+            $t3 = $this->timer();
+            $this->dbg('step3', 'Mulai normalisasi Min-Max', [], $batch->id);
+
             $steps[] = $this->stepNormalize($scored, $normalized, $normStats);
 
+            $this->info('step3', 'Normalisasi selesai', [
+                'norm_stats' => $normStats,
+                'elapsed'    => $this->elapsed($t3),
+            ], $batch->id);
+
+            $this->dbg('step3', 'Sampel normalized data (maks 3 baris)', [
+                'sample' => $normalized->take(3)->map(fn($r) => [
+                    'customer_id'    => $r->customer_id,
+                    'recency_norm'   => $r->recency_norm,
+                    'frequency_norm' => $r->frequency_norm,
+                    'monetary_norm'  => $r->monetary_norm,
+                ])->values()->toArray(),
+            ], $batch->id);
+
             // ================================================================
-            // STEP 4 — K-Means clustering
+            // STEP 4
             // ================================================================
+            $t4 = $this->timer();
+            $this->dbg('step4', "Mulai K-Means (K={$kClusters})", [], $batch->id);
+
             $steps[] = $this->stepKMeans($normalized, $kClusters, $clustered, $centroids, $iterations, $inertia);
 
-            // ================================================================
-            // STEP 5 — Auto-label segmen berdasarkan centroid
-            // ================================================================
-            $steps[] = $this->stepAutoLabel($centroids, $clusterLabels);
+            $this->info('step4', 'K-Means selesai', [
+                'k'          => $kClusters,
+                'iterations' => $iterations,
+                'inertia'    => round($inertia, 6),
+                'elapsed'    => $this->elapsed($t4),
+                'cluster_sizes' => $this->clusterSizes(
+                    $clustered->pluck('cluster_id')->toArray(),
+                    $kClusters
+                ),
+            ], $batch->id);
+
+            $this->dbg('step4', 'Final centroids setelah konvergensi', [
+                'centroids' => array_map(fn($c) => array_map(fn($v) => round($v, 6), $c), $centroids),
+            ], $batch->id);
 
             // ================================================================
-            // STEP 6 — Simpan ke database + update histori
+            // STEP 5
             // ================================================================
+            $t5 = $this->timer();
+            $this->dbg('step5', 'Mulai auto-labeling segmen', [], $batch->id);
+
+            $steps[] = $this->stepAutoLabel($centroids, $clusterLabels);
+
+            $this->info('step5', 'Auto-labeling selesai', [
+                'cluster_labels' => $clusterLabels,
+                'elapsed'        => $this->elapsed($t5),
+            ], $batch->id);
+
+            // ================================================================
+            // STEP 6
+            // ================================================================
+            $t6 = $this->timer();
+            $this->dbg('step6', 'Mulai persist ke database', [], $batch->id);
+
             $steps[] = $this->stepPersist($batch, $rawData, $scored, $normalized, $clustered, $clusterLabels, $centroids, $savedCount);
+
+            $this->info('step6', 'Persist selesai', [
+                'saved_count' => $savedCount,
+                'elapsed'     => $this->elapsed($t6),
+            ], $batch->id);
 
             // --- Finalisasi batch ---
             $durationMs = (int) ((microtime(true) - $startTime) * 1000);
@@ -96,11 +258,34 @@ class RfmService
                 'duration_ms'      => $durationMs,
             ]);
 
+            Log::channel('rfm')->info('[RFM][calculate] ===== KALKULASI SELESAI =====', [
+                'batch_id'    => $batch->id,
+                'status'      => 'completed',
+                'duration_ms' => $durationMs,
+                'saved'       => $savedCount,
+                'k'           => $kClusters,
+                'iterations'  => $iterations,
+                'inertia'     => round($inertia, 6),
+            ]);
+
             return ['batch' => $batch->fresh(), 'steps' => $steps, 'success' => true];
 
         } catch (\Throwable $e) {
+            $durationMs = (int) ((microtime(true) - $startTime) * 1000);
             $batch->update(['status' => 'failed', 'error_message' => $e->getMessage()]);
+
+            $this->err('calculate', 'Pipeline gagal — exception ditangkap', [
+                'batch_id'    => $batch->id,
+                'error'       => $e->getMessage(),
+                'exception'   => get_class($e),
+                'file'        => $e->getFile(),
+                'line'        => $e->getLine(),
+                'duration_ms' => $durationMs,
+                'trace'       => collect(explode("\n", $e->getTraceAsString()))->take(10)->toArray(),
+            ], $batch->id);
+
             Log::error('RFM calculation failed', ['error' => $e->getMessage(), 'batch_id' => $batch->id]);
+
             return ['batch' => $batch->fresh(), 'steps' => $steps, 'success' => false, 'error' => $e->getMessage()];
         }
     }
@@ -110,13 +295,21 @@ class RfmService
     // =========================================================================
     private function stepRawData(&$rawData, Carbon $from, Carbon $to): array
     {
+        $t = $this->timer();
         $referenceDate = $to;
+
+        $this->dbg('step1', 'Eksekusi query transaksi', [
+            'from'           => $from->toDateString(),
+            'to'             => $to->toDateString(),
+            'reference_date' => $referenceDate->toDateString(),
+        ]);
 
         $rawData = DB::table('transactions as t')
             ->join('customers as c', 'c.id', '=', 't.customer_id')
             ->where('t.status', 'completed')
             ->whereBetween('t.transaction_date', [$from, $to])
             ->whereNull('c.deleted_at')
+            ->where('c.type', 'member')
             ->groupBy('t.customer_id', 'c.name', 'c.email')
             ->selectRaw("
                 t.customer_id,
@@ -131,19 +324,46 @@ class RfmService
             ->orderBy('t.customer_id')
             ->get();
 
+        $this->dbg('step1', 'Query selesai', [
+            'row_count' => $rawData->count(),
+            'elapsed'   => $this->elapsed($t),
+        ]);
+
+        if ($rawData->isNotEmpty()) {
+            $this->dbg('step1', 'Statistik distribusi raw data', [
+                'recency_days'  => [
+                    'min' => $rawData->min('recency_days'),
+                    'max' => $rawData->max('recency_days'),
+                    'avg' => round($rawData->avg('recency_days'), 1),
+                ],
+                'frequency' => [
+                    'min' => $rawData->min('frequency'),
+                    'max' => $rawData->max('frequency'),
+                    'avg' => round($rawData->avg('frequency'), 1),
+                ],
+                'monetary' => [
+                    'min' => $rawData->min('monetary'),
+                    'max' => $rawData->max('monetary'),
+                    'avg' => round($rawData->avg('monetary'), 2),
+                ],
+            ]);
+        } else {
+            $this->warn('step1', 'Query mengembalikan 0 baris — cek filter tanggal, status transaksi, &amp; customer_type=member');
+        }
+
         $stats = [
-            'count'               => $rawData->count(),
-            'avg_recency_days'    => round($rawData->avg('recency_days'), 1),
-            'avg_frequency'       => round($rawData->avg('frequency'), 1),
-            'avg_monetary'        => round($rawData->avg('monetary'), 2),
-            'max_monetary'        => $rawData->max('monetary'),
-            'min_recency_days'    => $rawData->min('recency_days'),
+            'count'            => $rawData->count(),
+            'avg_recency_days' => round($rawData->avg('recency_days'), 1),
+            'avg_frequency'    => round($rawData->avg('frequency'), 1),
+            'avg_monetary'     => round($rawData->avg('monetary'), 2),
+            'max_monetary'     => $rawData->max('monetary'),
+            'min_recency_days' => $rawData->min('recency_days'),
         ];
 
         return [
             'step'        => 1,
             'title'       => 'Pengambilan data transaksi',
-            'description' => "Mengambil data {$stats['count']} pelanggan dengan transaksi completed dari {$from->format('d M Y')} hingga {$to->format('d M Y')}.",
+            'description' => "Mengambil data {$stats['count']} pelanggan bertipe member dengan transaksi completed dari {$from->format('d M Y')} hingga {$to->format('d M Y')}.",
             'stats'       => $stats,
             'formula'     => [
                 'Recency'   => "DATEDIFF(tanggal_referensi, MAX(transaction_date))",
@@ -158,12 +378,19 @@ class RfmService
     // =========================================================================
     private function stepQuintile($rawData, &$scored): array
     {
-        $recencies  = $rawData->pluck('recency_days')->sort()->values();
+        $t = $this->timer();
+
+        $recencies   = $rawData->pluck('recency_days')->sort()->values();
         $frequencies = $rawData->pluck('frequency')->sort()->values();
         $monetaries  = $rawData->pluck('monetary')->sort()->values();
 
+        $this->dbg('step2', 'Data diurutkan untuk quintile', [
+            'recency_range'   => [$recencies->first(), $recencies->last()],
+            'frequency_range' => [$frequencies->first(), $frequencies->last()],
+            'monetary_range'  => [$monetaries->first(), $monetaries->last()],
+        ]);
+
         $scored = $rawData->map(function ($row) use ($recencies, $frequencies, $monetaries) {
-            // Recency: semakin kecil (baru) = skor lebih tinggi → dibalik
             $rScore = $this->quintile($row->recency_days, $recencies, reverse: true);
             $fScore = $this->quintile($row->frequency, $frequencies, reverse: false);
             $mScore = $this->quintile($row->monetary, $monetaries, reverse: false);
@@ -177,10 +404,36 @@ class RfmService
             ]);
         });
 
-        // Hitung breakpoints quintile untuk ditampilkan
         $rBreaks = $this->quintileBreaks($recencies);
         $fBreaks = $this->quintileBreaks($frequencies);
         $mBreaks = $this->quintileBreaks($monetaries);
+
+        $rDist = $this->scoreDistribution($scored, 'r_score');
+        $fDist = $this->scoreDistribution($scored, 'f_score');
+        $mDist = $this->scoreDistribution($scored, 'm_score');
+
+        // Cek distribusi timpang: ada skor yang count-nya 0
+        foreach (['r' => $rDist, 'f' => $fDist, 'm' => $mDist] as $metric => $dist) {
+            $zeros = array_filter($dist, fn($v) => $v === 0);
+            if (!empty($zeros)) {
+                $this->warn('step2', "Distribusi quintile metric [{$metric}] memiliki skor kosong (count=0) — data mungkin terlalu sedikit atau duplikat banyak", [
+                    'distribution' => $dist,
+                ]);
+            }
+        }
+
+        $this->dbg('step2', 'Quintile breakpoints', [
+            'recency_breaks'   => $rBreaks,
+            'frequency_breaks' => $fBreaks,
+            'monetary_breaks'  => $mBreaks,
+        ]);
+
+        $this->dbg('step2', 'Score distribution', [
+            'r' => $rDist,
+            'f' => $fDist,
+            'm' => $mDist,
+            'elapsed' => $this->elapsed($t),
+        ]);
 
         return [
             'step'        => 2,
@@ -198,9 +451,9 @@ class RfmService
                 'monetary'  => $mBreaks,
             ],
             'distribution' => [
-                'r' => $this->scoreDistribution($scored, 'r_score'),
-                'f' => $this->scoreDistribution($scored, 'f_score'),
-                'm' => $this->scoreDistribution($scored, 'm_score'),
+                'r' => $rDist,
+                'f' => $fDist,
+                'm' => $mDist,
             ],
         ];
     }
@@ -212,9 +465,16 @@ class RfmService
     private function quintile($value, $sorted, bool $reverse): int
     {
         $n = $sorted->count();
-        if ($n === 0) return 3;
 
-        $rank = $sorted->filter(fn($v) => $v <= $value)->count();
+        if ($n === 0) {
+            $this->warn('quintile', 'Sorted collection kosong, fallback ke skor 3', [
+                'value'   => $value,
+                'reverse' => $reverse,
+            ]);
+            return 3;
+        }
+
+        $rank       = $sorted->filter(fn($v) => $v <= $value)->count();
         $percentile = $rank / $n;
 
         $score = match(true) {
@@ -253,6 +513,8 @@ class RfmService
     // =========================================================================
     private function stepNormalize($scored, &$normalized, &$normStats): array
     {
+        $t = $this->timer();
+
         $rValues = $scored->pluck('recency_days');
         $fValues = $scored->pluck('frequency');
         $mValues = $scored->pluck('monetary');
@@ -263,13 +525,36 @@ class RfmService
             'monetary'  => ['min' => $mValues->min(), 'max' => $mValues->max()],
         ];
 
+        $this->dbg('step3', 'Range tiap metrik sebelum normalisasi', $normStats);
+
+        // Deteksi potensi masalah: min == max (semua nilai identik)
+        foreach ($normStats as $metric => $range) {
+            if ($range['min'] == $range['max']) {
+                $this->warn('step3', "Metric [{$metric}] memiliki min == max — semua nilai akan dinormalisasi ke 0.5", [
+                    'value' => $range['min'],
+                ]);
+            }
+        }
+
         $normalized = $scored->map(function ($row) use ($normStats) {
             return (object) array_merge((array) $row, [
-                'recency_norm'   => $this->minMax($row->recency_days, $normStats['recency']['min'], $normStats['recency']['max'], reverse: true),
+                'recency_norm'   => $this->minMax($row->recency_days, $normStats['recency']['min'],   $normStats['recency']['max'],   reverse: true),
                 'frequency_norm' => $this->minMax($row->frequency,    $normStats['frequency']['min'], $normStats['frequency']['max']),
-                'monetary_norm'  => $this->minMax($row->monetary,     $normStats['monetary']['min'], $normStats['monetary']['max']),
+                'monetary_norm'  => $this->minMax($row->monetary,     $normStats['monetary']['min'],  $normStats['monetary']['max']),
             ]);
         });
+
+        // Verifikasi range hasil normalisasi (harus 0–1)
+        $rNorms = $normalized->pluck('recency_norm');
+        $fNorms = $normalized->pluck('frequency_norm');
+        $mNorms = $normalized->pluck('monetary_norm');
+
+        $this->dbg('step3', 'Verifikasi range hasil normalisasi', [
+            'recency_norm'   => ['min' => $rNorms->min(), 'max' => $rNorms->max()],
+            'frequency_norm' => ['min' => $fNorms->min(), 'max' => $fNorms->max()],
+            'monetary_norm'  => ['min' => $mNorms->min(), 'max' => $mNorms->max()],
+            'elapsed'        => $this->elapsed($t),
+        ]);
 
         return [
             'step'        => 3,
@@ -287,7 +572,12 @@ class RfmService
 
     private function minMax($value, $min, $max, bool $reverse = false): float
     {
-        if ($max == $min) return 0.5;
+        if ($max == $min) {
+            $this->warn('minMax', 'max == min, fallback ke 0.5', [
+                'value' => $value, 'min' => $min, 'max' => $max, 'reverse' => $reverse,
+            ]);
+            return 0.5;
+        }
         $norm = ($value - $min) / ($max - $min);
         return round($reverse ? (1 - $norm) : $norm, 6);
     }
@@ -297,12 +587,37 @@ class RfmService
     // =========================================================================
     private function stepKMeans($normalized, int $k, &$clustered, &$centroids, &$iterations, &$inertia): array
     {
+        $t       = $this->timer();
         $maxIter = 100;
-        $data    = $normalized->values()->toArray();
+        // Konversi eksplisit ke array of array — ->toArray() pada Collection of stdClass
+        // menghasilkan array of stdClass, bukan array of array (root cause error ini)
+        $data = $normalized->values()->map(fn($row) => [
+            'recency_norm'   => $row->recency_norm,
+            'frequency_norm' => $row->frequency_norm,
+            'monetary_norm'  => $row->monetary_norm,
+        ])->toArray();
         $n       = count($data);
 
-        // Inisialisasi centroid: K-Means++ untuk konvergensi lebih cepat
+        $this->dbg('step4', "Memulai K-Means", [
+            'n_points' => $n,
+            'k'        => $k,
+            'max_iter' => $maxIter,
+        ]);
+
+        if ($n < $k) {
+            $this->err('step4', 'Jumlah data lebih kecil dari K — tidak bisa membuat cluster', [
+                'n' => $n, 'k' => $k,
+            ]);
+            throw new \RuntimeException("Jumlah pelanggan ({$n}) lebih kecil dari jumlah cluster K={$k}.");
+        }
+
+        // Inisialisasi K-Means++
+        $tInit = $this->timer();
         $centroids = $this->initCentroidsKMeansPlusPlus($data, $k);
+        $this->dbg('step4', 'K-Means++ inisialisasi centroid awal', [
+            'centroids' => array_map(fn($c) => array_map(fn($v) => round($v, 4), $c), $centroids),
+            'elapsed'   => $this->elapsed($tInit),
+        ]);
 
         $assignments = array_fill(0, $n, 0);
         $iterLog     = [];
@@ -314,27 +629,59 @@ class RfmService
                 $newAssignments[$i] = $this->nearestCentroid($point, $centroids);
             }
 
-            // Hitung SSE iterasi ini
+            // SSE iterasi ini
             $sse = $this->calculateSSE($data, $newAssignments, $centroids);
             $iterLog[] = ['iteration' => $iter + 1, 'sse' => round($sse, 6)];
+
+            // Log setiap 10 iterasi + iterasi pertama dan terakhir
+            if ($iter === 0 || ($iter + 1) % 10 === 0) {
+                $this->dbg('step4', "Iterasi #" . ($iter + 1), [
+                    'sse'            => round($sse, 6),
+                    'cluster_sizes'  => $this->clusterSizes($newAssignments, $k),
+                ]);
+            }
 
             // Cek konvergensi
             if ($newAssignments === $assignments && $iter > 0) {
                 $assignments = $newAssignments;
                 $iterations  = $iter + 1;
+                $this->info('step4', "Konvergen pada iterasi #{$iterations}", [
+                    'sse'     => round($sse, 6),
+                    'elapsed' => $this->elapsed($t),
+                ]);
                 break;
             }
             $assignments = $newAssignments;
 
-            // Update step: hitung ulang centroid
+            // Update centroids
             $centroids = $this->updateCentroids($data, $assignments, $k);
 
             if ($iter === $maxIter - 1) {
                 $iterations = $maxIter;
+                $this->warn('step4', "Belum konvergen setelah {$maxIter} iterasi — batas maksimum tercapai", [
+                    'final_sse' => round($sse, 6),
+                ]);
             }
         }
 
         $inertia = $this->calculateSSE($data, $assignments, $centroids);
+
+        // Deteksi cluster kosong
+        $sizes = $this->clusterSizes($assignments, $k);
+        foreach ($sizes as $clusterId => $count) {
+            if ($count === 0) {
+                $this->warn('step4', "Cluster #{$clusterId} kosong (0 anggota) setelah konvergensi", [
+                    'all_sizes' => $sizes,
+                ]);
+            }
+        }
+
+        $this->info('step4', 'K-Means selesai', [
+            'iterations'    => $iterations,
+            'inertia'       => round($inertia, 6),
+            'cluster_sizes' => $sizes,
+            'elapsed'       => $this->elapsed($t),
+        ]);
 
         // Gabungkan assignment ke normalized data
         $clustered = $normalized->map(function ($row, $i) use ($assignments, $centroids) {
@@ -346,8 +693,8 @@ class RfmService
             );
 
             return (object) array_merge((array) $row, [
-                'cluster_id'            => $clusterId,
-                'distance_to_centroid'  => round($distance, 6),
+                'cluster_id'           => $clusterId,
+                'distance_to_centroid' => round($distance, 6),
             ]);
         });
 
@@ -367,52 +714,70 @@ class RfmService
             'inertia'         => round($inertia, 6),
             'iter_log'        => $iterLog,
             'final_centroids' => array_map(fn($c) => array_map(fn($v) => round($v, 4), $c), $centroids),
-            'cluster_sizes'   => $this->clusterSizes($assignments, $k),
+            'cluster_sizes'   => $sizes,
         ];
     }
 
     private function initCentroidsKMeansPlusPlus(array $data, int $k): array
     {
+        $this->dbg('kmeans++', "Inisialisasi {$k} centroid dengan K-Means++");
+
         $n = count($data);
         $centroids = [];
 
         // Centroid pertama: acak
-        $centroids[] = [$data[array_rand($data)]['recency_norm'], $data[array_rand($data)]['frequency_norm'], $data[array_rand($data)]['monetary_norm']];
-        // Lebih tepat:
-        $first = $data[array_rand($data)];
+        $firstIdx  = array_rand($data);
+        $first     = $data[$firstIdx];
         $centroids = [[$first['recency_norm'], $first['frequency_norm'], $first['monetary_norm']]];
+
+        $this->dbg('kmeans++', "Centroid pertama dipilih (idx={$firstIdx})", [
+            'centroid' => $centroids[0],
+        ]);
 
         for ($c = 1; $c < $k; $c++) {
             $distances = [];
             foreach ($data as $point) {
                 $minDist = PHP_FLOAT_MAX;
                 foreach ($centroids as $centroid) {
-                    $d = $this->euclidean([$point['recency_norm'], $point['frequency_norm'], $point['monetary_norm']], $centroid);
+                    $d       = $this->euclidean([$point['recency_norm'], $point['frequency_norm'], $point['monetary_norm']], $centroid);
                     $minDist = min($minDist, $d * $d);
                 }
                 $distances[] = $minDist;
             }
-            // Pilih titik berikutnya dengan probabilitas proporsional terhadap jarak kuadrat
+
             $total = array_sum($distances);
-            $rand  = mt_rand() / mt_getrandmax() * $total;
-            $cumul = 0;
-            $chosen = count($data) - 1;
-            foreach ($distances as $i => $d) {
-                $cumul += $d;
-                if ($cumul >= $rand) { $chosen = $i; break; }
+
+            if ($total <= 0) {
+                $this->warn('kmeans++', "Total jarak kuadrat = 0 saat memilih centroid ke-{$c} — semua titik mungkin identik, fallback ke random");
+                $chosen = array_rand($data);
+            } else {
+                $rand  = mt_rand() / mt_getrandmax() * $total;
+                $cumul = 0;
+                $chosen = count($data) - 1;
+                foreach ($distances as $i => $d) {
+                    $cumul += $d;
+                    if ($cumul >= $rand) { $chosen = $i; break; }
+                }
             }
-            $p = $data[$chosen];
+
+            $p           = $data[$chosen];
             $centroids[] = [$p['recency_norm'], $p['frequency_norm'], $p['monetary_norm']];
+
+            $this->dbg('kmeans++', "Centroid ke-{$c} dipilih (idx={$chosen})", [
+                'centroid'        => end($centroids),
+                'total_dist_sq'   => round($total, 6),
+            ]);
         }
 
         return $centroids;
     }
 
-    private function nearestCentroid(object $point, array $centroids): int
+    private function nearestCentroid(array $point, array $centroids): int
     {
-        $minDist  = PHP_FLOAT_MAX;
-        $nearest  = 0;
-        $coords   = [$point->recency_norm, $point->frequency_norm, $point->monetary_norm];
+        $minDist = PHP_FLOAT_MAX;
+        $nearest = 0;
+        $coords  = [$point['recency_norm'], $point['frequency_norm'], $point['monetary_norm']];
+
         foreach ($centroids as $i => $centroid) {
             $d = $this->euclidean($coords, $centroid);
             if ($d < $minDist) { $minDist = $d; $nearest = $i; }
@@ -422,17 +787,22 @@ class RfmService
 
     private function updateCentroids(array $data, array $assignments, int $k): array
     {
-        $sums  = array_fill(0, $k, [0.0, 0.0, 0.0]);
+        $sums   = array_fill(0, $k, [0.0, 0.0, 0.0]);
         $counts = array_fill(0, $k, 0);
+
         foreach ($data as $i => $point) {
             $c = $assignments[$i];
-            $sums[$c][0] += $point['recency_norm'] ?? 0;
+            $sums[$c][0] += $point['recency_norm']   ?? 0;
             $sums[$c][1] += $point['frequency_norm'] ?? 0;
-            $sums[$c][2] += $point['monetary_norm'] ?? 0;
+            $sums[$c][2] += $point['monetary_norm']  ?? 0;
             $counts[$c]++;
         }
+
         return array_map(function ($sum, $count) {
-            if ($count === 0) return [0.5, 0.5, 0.5]; // fallback
+            if ($count === 0) {
+                $this->warn('updateCentroids', 'Cluster kosong saat update centroid — fallback ke [0.5, 0.5, 0.5]');
+                return [0.5, 0.5, 0.5];
+            }
             return [$sum[0] / $count, $sum[1] / $count, $sum[2] / $count];
         }, $sums, $counts);
     }
@@ -446,10 +816,10 @@ class RfmService
     {
         $sse = 0;
         foreach ($data as $i => $point) {
-            $c = $assignments[$i];
-            $sse += ($point['recency_norm'] - $centroids[$c][0])**2
+            $c    = $assignments[$i];
+            $sse += ($point['recency_norm']   - $centroids[$c][0])**2
                   + ($point['frequency_norm'] - $centroids[$c][1])**2
-                  + ($point['monetary_norm'] - $centroids[$c][2])**2;
+                  + ($point['monetary_norm']  - $centroids[$c][2])**2;
         }
         return $sse;
     }
@@ -462,27 +832,43 @@ class RfmService
     }
 
     // =========================================================================
-    // STEP 5 — Auto-label segmen berdasarkan posisi centroid
+    // STEP 5 — Auto-label segmen
     // =========================================================================
     private function stepAutoLabel(array $centroids, &$clusterLabels): array
     {
-        // Hitung "RFM score" tiap centroid: rata-rata R, F, M (semua skala 0–1, sudah dibalik untuk R)
+        $t = $this->timer();
+
         $centroidScores = array_map(fn($c) => ($c[0] + $c[1] + $c[2]) / 3, $centroids);
 
-        // Kandidat label berdasarkan skor centroid (dari tinggi ke rendah)
-        $labelPool = ['Champions', 'Loyal Customers', 'Potential Loyalists',
-                      'At Risk', 'Needs Attention', 'About to Sleep',
-                      'Lost Customers', 'New Customers', 'Hibernating', 'Promising'];
+        $this->dbg('step5', 'Skor tiap centroid (R+F+M)/3', [
+            'raw_scores' => array_map(fn($s) => round($s, 6), $centroidScores),
+        ]);
 
-        // Urutkan cluster dari centroid tertinggi → terendah, assign label
+        $labelPool = [
+            'Champions', 'Loyal Customers', 'Potential Loyalists',
+            'At Risk', 'Needs Attention', 'About to Sleep',
+            'Lost Customers', 'New Customers', 'Hibernating', 'Promising',
+        ];
+
         arsort($centroidScores);
         $clusterLabels = [];
         $labelIdx = 0;
         foreach ($centroidScores as $clusterId => $score) {
-            $clusterLabels[(string) $clusterId] = $labelPool[$labelIdx] ?? "Cluster {$clusterId}";
+            $label = $labelPool[$labelIdx] ?? "Cluster {$clusterId}";
+            $clusterLabels[(string) $clusterId] = $label;
+
+            $this->dbg('step5', "Cluster #{$clusterId} → [{$label}]", [
+                'centroid_score' => round($score, 6),
+                'rank'           => $labelIdx + 1,
+            ]);
             $labelIdx++;
         }
         ksort($clusterLabels);
+
+        $this->info('step5', 'Label akhir per cluster', [
+            'cluster_labels' => $clusterLabels,
+            'elapsed'        => $this->elapsed($t),
+        ]);
 
         return [
             'step'        => 5,
@@ -502,19 +888,45 @@ class RfmService
     // =========================================================================
     private function stepPersist($batch, $rawData, $scored, $normalized, $clustered, array $clusterLabels, array $centroids, &$savedCount): array
     {
+        $t             = $this->timer();
         $savedCount    = 0;
         $changedCount  = 0;
+        $skippedCount  = 0;
         $clustered     = $clustered->keyBy('customer_id');
 
-        DB::transaction(function () use ($batch, $rawData, $scored, $normalized, $clustered, $clusterLabels, $centroids, &$savedCount, &$changedCount) {
-            foreach ($rawData as $raw) {
-                $cid      = $raw->customer_id;
-                $sc       = $scored->firstWhere('customer_id', $cid);
-                $cl       = $clustered[$cid] ?? null;
+        $this->dbg('step6', 'Mulai DB transaction untuk persist RFM scores', [
+            'batch_id'         => $batch->id,
+            'raw_data_count'   => $rawData->count(),
+            'clustered_count'  => $clustered->count(),
+            'cluster_labels'   => $clusterLabels,
+        ]);
 
-                if (!$sc || !$cl) continue;
+        DB::transaction(function () use (
+            $batch, $rawData, $scored, $normalized, $clustered,
+            $clusterLabels, $centroids, $t, &$savedCount, &$changedCount, &$skippedCount
+        ) {
+            foreach ($rawData as $idx => $raw) {
+                $cid = $raw->customer_id;
+                $sc  = $scored->firstWhere('customer_id', $cid);
+                $cl  = $clustered[$cid] ?? null;
+
+                if (!$sc || !$cl) {
+                    $skippedCount++;
+                    $this->warn('step6', "Customer #{$cid} dilewati — data scored atau clustered tidak ditemukan", [
+                        'has_scored'    => !is_null($sc),
+                        'has_clustered' => !is_null($cl),
+                    ]);
+                    continue;
+                }
 
                 $segmentName = $clusterLabels[(string) ($cl->cluster_id ?? 0)] ?? 'Unknown';
+
+                if ($segmentName === 'Unknown') {
+                    $this->warn('step6', "Customer #{$cid} mendapat segmen 'Unknown' — cluster_id tidak ada di label map", [
+                        'cluster_id'    => $cl->cluster_id,
+                        'cluster_labels' => $clusterLabels,
+                    ]);
+                }
 
                 // Simpan rfm_scores
                 $rfmScore = RfmScore::create([
@@ -541,11 +953,17 @@ class RfmService
                     ->latest()
                     ->first();
 
-                $prevSegment  = $lastHistory?->segment_to;
-                $isChanged    = $prevSegment !== $segmentName;
-                if ($isChanged && $prevSegment !== null) $changedCount++;
+                $prevSegment = $lastHistory?->segment_to;
+                $isChanged   = $prevSegment !== $segmentName;
 
-                // Simpan rfm_segment_history
+                if ($isChanged && $prevSegment !== null) {
+                    $changedCount++;
+                    $this->dbg('step6', "Customer #{$cid} berpindah segmen", [
+                        'from' => $prevSegment,
+                        'to'   => $segmentName,
+                    ]);
+                }
+
                 RfmSegmentHistory::create([
                     'customer_id'          => $cid,
                     'rfm_score_id'         => $rfmScore->id,
@@ -560,8 +978,26 @@ class RfmService
                 ]);
 
                 $savedCount++;
+
+                // Log progress setiap 500 record
+                if ($savedCount % 500 === 0) {
+                    $this->dbg('step6', "Progress persist: {$savedCount}/{$rawData->count()} disimpan", [
+                        'elapsed' => $this->elapsed($t),
+                    ]);
+                }
             }
         });
+
+        $this->info('step6', 'DB transaction selesai', [
+            'saved'   => $savedCount,
+            'changed' => $changedCount,
+            'skipped' => $skippedCount,
+            'elapsed' => $this->elapsed($t),
+        ]);
+
+        if ($skippedCount > 0) {
+            $this->warn('step6', "{$skippedCount} pelanggan dilewati — periksa join antara rawData, scored, dan clustered");
+        }
 
         return [
             'step'        => 6,
@@ -570,36 +1006,57 @@ class RfmService
             'stats'       => [
                 'saved'   => $savedCount,
                 'changed' => $changedCount,
+                'skipped' => $skippedCount,
             ],
         ];
     }
 
 
-    /**
- * Menghitung SSE untuk nilai K tertentu tanpa melakukan full pipeline.
- * Digunakan untuk Elbow Method API.
- */
-public function calculateSseForK(array $data, int $k): float
-{
-    // Konversi array ke object jika perlu (karena logic KMeans kamu pakai object)
-    $mappedData = array_map(fn($item) => (object)$item, $data);
-    
-    // Inisialisasi
-    $centroids = $this->initCentroidsKMeansPlusPlus($data, $k);
-    $assignments = [];
-    $maxIter = 20; // Cukup 20 iterasi untuk elbow agar cepat
+    // =========================================================================
+    // Elbow Method helper
+    // =========================================================================
 
-    for ($iter = 0; $iter < $maxIter; $iter++) {
-        $newAssignments = [];
-        foreach ($mappedData as $i => $point) {
-            $newAssignments[$i] = $this->nearestCentroid($point, $centroids);
+    /**
+     * Menghitung SSE untuk nilai K tertentu tanpa melakukan full pipeline.
+     * Digunakan untuk Elbow Method API.
+     */
+    public function calculateSseForK(array $data, int $k): float
+    {
+        $t = $this->timer();
+        $this->dbg('elbow', "Hitung SSE untuk K={$k}", ['n_points' => count($data)]);
+
+        $n = count($data);
+        if ($n < $k) {
+            $this->warn('elbow', "Data ({$n}) lebih kecil dari K={$k} — return SSE=0", ['n' => $n]);
+            return 0.0;
         }
 
-        if ($newAssignments === $assignments) break;
-        $assignments = $newAssignments;
-        $centroids = $this->updateCentroids($data, $assignments, $k);
-    }
 
-    return $this->calculateSSE($data, $assignments, $centroids);
-}
+        $centroids   = $this->initCentroidsKMeansPlusPlus($data, $k);
+        $assignments = [];
+        $maxIter     = 20;
+
+        for ($iter = 0; $iter < $maxIter; $iter++) {
+            $newAssignments = [];
+            foreach ($data as $i => $point) {
+                $newAssignments[$i] = $this->nearestCentroid($point, $centroids);
+            }
+
+            if ($newAssignments === $assignments) {
+                $this->dbg('elbow', "K={$k} konvergen pada iterasi #" . ($iter + 1));
+                break;
+            }
+            $assignments = $newAssignments;
+            $centroids   = $this->updateCentroids($data, $assignments, $k);
+        }
+
+        $sse = $this->calculateSSE($data, $assignments, $centroids);
+
+        $this->dbg('elbow', "SSE K={$k} selesai", [
+            'sse'     => round($sse, 6),
+            'elapsed' => $this->elapsed($t),
+        ]);
+
+        return $sse;
+    }
 }

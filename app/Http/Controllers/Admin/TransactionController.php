@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Exports\TransactionExport;
 use App\Http\Controllers\Controller;
+use App\Imports\TransactionSheetImport;
 use App\Imports\TransactionsImport;
 use App\Models\Customers;
 use App\Models\ProductDetail;
@@ -12,10 +13,13 @@ use App\Models\Transaction;
 use App\Models\TransactionDetail;
 use Carbon\Carbon;
 use Exception;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Maatwebsite\Excel\Facades\Excel;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 class TransactionController extends Controller
 {
@@ -252,7 +256,7 @@ class TransactionController extends Controller
     public function export(Request $request) 
     {
         $filters = $request->only(['search', 'status', 'start_date', 'end_date']);
-        $fileName = 'Laporan_Transaksi_' . now()->format('Y-m-d_His') . '.xlsx';
+        $fileName = 'Laporan_Riwayat_Transaksi_' . now()->format('Y-m-d_His') . '.xlsx';
 
         return Excel::download(new TransactionExport($filters), $fileName);
     }
@@ -260,15 +264,37 @@ class TransactionController extends Controller
     /**
      * Import dari Excel.
      */
-    public function importProcess(Request $request) 
+     public function importProcess(Request $request)
     {
-        $request->validate(['file' => 'required|mimes:xlsx,xls']);
+        // ── Validasi file ───────────────────────────────────────────
+        $request->validate([
+            'file' => 'required|file|mimes:xlsx,xls,csv|max:5120',
+        ]);
 
         try {
-            Excel::import(new TransactionsImport, $request->file('file'));
-            return back()->with('success', 'Data transaksi berhasil diimport!');
-        } catch (Exception $e) {
-            return back()->with('error', 'Gagal import: ' . $e->getMessage());
+            // ── Jalankan import ─────────────────────────────────────
+            $import = new TransactionSheetImport();
+            $import->import($request->file('file'));
+            // atau: Excel::import($import, $request->file('file'));
+
+            // ── Ambil hasil ─────────────────────────────────────────
+            $imported  = $import->getImportedCount();
+            $updated   = $import->getUpdatedCount();
+            $failures  = $import->getFormattedFailures();
+
+            // ── Redirect ke halaman index ───────────────────────────
+            return redirect()
+                ->route('admin.transactions')
+                ->with('success', 'Import berhasil')
+                ->with('imported', $imported)
+                ->with('updated', $updated)
+                ->with('failed', count($failures))
+                ->with('failures', $failures);
+
+        } catch (\Throwable $e) {
+            return redirect()
+                ->back()
+                ->with('error', 'Import gagal: ' . $e->getMessage());
         }
     }
 }

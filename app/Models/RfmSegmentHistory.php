@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class RfmSegmentHistory extends Model
 {
+    protected $table = "rfm_segment_history";
      protected $fillable = [
         'customer_id', 'rfm_score_id', 'calculation_batch_id',
         'segment_from', 'segment_to',

@@ -126,7 +126,23 @@ return [
         'emergency' => [
             'path' => storage_path('logs/laravel.log'),
         ],
+        
+        'rfm' => [
+            'driver'    => 'daily',          // Rotasi harian
+            'path'      => storage_path('logs/rfm/rfm.log'),
+            'level'     => env('RFM_LOG_LEVEL', 'debug'),  // Override via .env: RFM_LOG_LEVEL=info
+            'days'      => 30,               // Simpan log 30 hari
+            'permission'=> 0664,
+            'formatter' => Monolog\Formatter\LineFormatter::class,
+            'formatter_with' => [
+                'format'                => "[%datetime%] %channel%.%level_name%: %message% %context%\n",
+                'dateFormat'            => 'Y-m-d H:i:s',
+                'allowInlineLineBreaks' => true,
+                'ignoreEmptyContextAndExtra' => false,
+            ],
+        ],
 
     ],
+
 
 ];

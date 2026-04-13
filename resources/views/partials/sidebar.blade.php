@@ -98,7 +98,7 @@
                             <a href="{{ route('admin.transactions.create') }}">Input Penjualan (POS)</a>
                         </li>
                         <li class="submenu-item {{ is_active('admin.transactions') }}">
-                            <a href="{{ route('admin.transactions') }}">Riwayat Transaksi</a>
+                            <a href="{{ route('admin.transactions') }}">Data Transaksi</a>
                         </li>
                     </ul>
                 </li>
