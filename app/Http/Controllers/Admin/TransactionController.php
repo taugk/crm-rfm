@@ -261,39 +261,47 @@ public function store(Request $request)
     /**
      * Import dari Excel.
      */
-     public function importProcess(Request $request)
-    {
-        // ── Validasi file ───────────────────────────────────────────
-        $request->validate([
-            'file' => 'required|file|mimes:xlsx,xls,csv|max:5120',
+     /**
+ * Import dari Excel dengan response JSON untuk AJAX.
+ */
+public function importProcess(Request $request)
+{
+    // ── Validasi file ───────────────────────────────────────────
+    $request->validate([
+        'file' => 'required|file|mimes:xlsx,xls,csv|max:5120',
+    ]);
+
+    try {
+        // ── Jalankan import ─────────────────────────────────────
+        $import = new TransactionSheetImport();
+        $import->import($request->file('file'));
+        
+        // ── Ambil hasil ─────────────────────────────────────────
+        $imported  = $import->getImportedCount();
+        $updated   = $import->getUpdatedCount();
+        $failures  = $import->getFormattedFailures();
+
+        // ── Return response JSON untuk AJAX ─────────────────────
+        return response()->json([
+            'success' => true,
+            'message' => "Import berhasil!",
+            'data' => [
+                'imported' => $imported,
+                'updated' => $updated,
+                'failed' => count($failures),
+                'failures' => $failures
+            ]
         ]);
 
-        try {
-            // ── Jalankan import ─────────────────────────────────────
-            $import = new TransactionSheetImport();
-            $import->import($request->file('file'));
-            // atau: Excel::import($import, $request->file('file'));
-
-            // ── Ambil hasil ─────────────────────────────────────────
-            $imported  = $import->getImportedCount();
-            $updated   = $import->getUpdatedCount();
-            $failures  = $import->getFormattedFailures();
-
-            // ── Redirect ke halaman index ───────────────────────────
-            return redirect()
-                ->route('admin.transactions')
-                ->with('success', 'Import berhasil')
-                ->with('imported', $imported)
-                ->with('updated', $updated)
-                ->with('failed', count($failures))
-                ->with('failures', $failures);
-
-        } catch (\Throwable $e) {
-            return redirect()
-                ->back()
-                ->with('error', 'Import gagal: ' . $e->getMessage());
-        }
+    } catch (\Throwable $e) {
+        Log::error('Import Error: ' . $e->getMessage());
+        
+        return response()->json([
+            'success' => false,
+            'message' => 'Import gagal: ' . $e->getMessage()
+        ], 500);
     }
+}
 
     /**
  * Memproses poin loyalty hanya untuk tipe 'member'

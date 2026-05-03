@@ -25,7 +25,7 @@
                         <i class="bi bi-box-seam text-white"></i>
                     </div>
                     <h6 class="text-muted">Total Produk</h6>
-                    <h3 class="fw-bold mb-0">{{ $data->total() }}</h3>
+                    <h3 class="fw-bold mb-0" id="totalProdukCount">{{ $data->total() }}</h3>
                 </div>
             </div>
         </div>
@@ -121,57 +121,75 @@
                     </thead>
                     <tbody id="productTableBody">
                         @forelse($data as $p)
-                        @php $detail = $p->details ?? (object)['stock' => 0, 'variant' => '-']; @endphp
-                        <tr class="product-row" data-stok="{{ $detail->stock }}" data-harga="{{ $p->price }}">
+                        @php 
+                            $detail = $p->details ?? (object)['stock' => 0, 'variant' => '-']; 
+                            $harga = $p->price;
+                            $stok = $detail->stock;
+                            $hasImage = $p->image && file_exists(public_path('storage/' . $p->image));
+                        @endphp
+                        <tr class="product-row" data-stok="{{ $stok }}" data-harga="{{ $harga }}">
                             <td><code class="text-primary fw-bold">{{ $p->sku }}</code></td>
                             <td>
                                 <div class="d-flex align-items-center">
-                                    <img src="{{ $p->image ? asset('storage/' . $p->image) : 'https://via.placeholder.com/45' }}"
-                                        class="rounded border me-3 product-img" 
-                                        width="45" 
-                                        height="45" 
-                                        style="object-fit: cover;"
-                                        data-fallback="https://via.placeholder.com/45"
-                                        onerror="this.src=this.getAttribute('data-fallback')">
+                                    @if($hasImage)
+                                        <img src="{{ asset('storage/' . $p->image) }}"
+                                             class="rounded border me-3 product-img" 
+                                             width="45" 
+                                             height="45" 
+                                             style="object-fit: cover;"
+                                             data-fallback="https://via.placeholder.com/45?text=No+Image"
+                                             loading="lazy">
+                                    @else
+                                        <img src="https://via.placeholder.com/45?text=No+Image"
+                                             class="rounded border me-3 product-img" 
+                                             width="45" 
+                                             height="45" 
+                                             style="object-fit: cover;">
+                                    @endif
                                     
                                     <div>
                                         <div class="fw-bold product-name">{{ $p->name }}</div>
                                         
-                                        @if($detail->variant)
+                                        @if($detail->variant && $detail->variant != '-')
                                             <small class="text-muted d-block">Varian: {{ $detail->variant }}</small>
                                         @endif
                                         
                                         <small class="text-secondary small" style="font-size: 0.7rem;">SKU: {{ $p->sku }}</small>
                                     </div>
                                 </div>
-                            </td>
+                             </td>
                             <td class="product-category">
                                 <span class="badge bg-light text-dark border">{{ $p->category->name ?? 'N/A' }}</span>
-                            </td>
-                            <td class="fw-bold">Rp {{ number_format($p->price, 0, ',', '.') }}</td>
-                            <td class="text-center">
-                                <span class="badge {{ $detail->stock <= 5 ? 'bg-danger' : 'bg-success' }} rounded-pill">
-                                    {{ $detail->stock <= 5 ? 'Menipis: ' : '' }}{{ $detail->stock }}
+                             </td>
+                            <td class="fw-bold product-price">Rp {{ number_format($harga, 0, ',', '.') }}</td>
+                            <td class="text-center product-stock">
+                                <span class="badge {{ $stok <= 5 ? 'bg-danger' : 'bg-success' }} rounded-pill">
+                                    {{ $stok <= 5 ? 'Menipis: ' : '' }}{{ $stok }}
                                 </span>
-                            </td>
+                             </td>
                             <td class="text-center no-export">
                                 <div class="d-flex justify-content-center gap-2">
                                     <a href="{{ route('admin.products.show', $p->id) }}" class="btn btn-sm btn-info text-white">Detail</a>
                                     <a href="{{ route('admin.products.edit', $p->id) }}" class="btn btn-sm btn-warning">Edit</a>
-                                    <form action="{{ route('admin.products.destroy', $p->id) }}" method="POST" class="d-inline">
-                                        @csrf @method('DELETE')
+                                    <form action="{{ route('admin.products.destroy', $p->id) }}" method="POST" class="d-inline delete-form">
+                                        @csrf 
+                                        @method('DELETE')
                                         <button type="submit" class="btn btn-sm btn-danger delete-confirm">Hapus</button>
                                     </form>
                                 </div>
-                            </td>
+                             </td>
                         </tr>
                         @empty
-                        <tr><td colspan="6" class="text-center py-5 text-muted">Belum ada data produk.</td></tr>
+                        <tr class="empty-row">
+                            <td colspan="6" class="text-center py-5 text-muted">Belum ada data produk.</td>
+                        </tr>
                         @endforelse
                     </tbody>
                 </table>
             </div>
-            <div class="mt-4">{{ $data->links('pagination::bootstrap-5') }}</div>
+            <div class="mt-4" id="paginationLinks">
+                {{ $data->links('pagination::bootstrap-5') }}
+            </div>
         </div>
     </div>
 </div>
@@ -182,8 +200,7 @@
         <div class="modal-content border-0 shadow">
             <div class="modal-header bg-success text-white">
                 <h5 class="modal-title"><i class="bi bi-eye me-2"></i>Konfirmasi Data Import</h5>
-                {{-- Tombol X juga diarahkan kembali ke index --}}
-                <a href="{{ route('admin.products') }}" class="btn-close btn-close-white"></a>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
                 <div class="alert alert-info py-2 small">
@@ -197,10 +214,8 @@
                 </div>
             </div>
             <div class="modal-footer bg-light">
-                {{-- Tombol Batal memicu reload ke route admin.products --}}
-                <a href="{{ route('admin.products') }}" class="btn btn-secondary">Batal</a>
-                
-                <button type="button" class="btn btn-success" onclick="document.getElementById('finalImportForm').submit()">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
+                <button type="button" class="btn btn-success" onclick="submitImport()">
                     <i class="bi bi-check-circle me-1"></i> Upload Sekarang
                 </button>
             </div>
@@ -209,8 +224,23 @@
 </div>
 
 <style>
-.stats-icon { width: 3rem; height: 3rem; border-radius: .5rem; display: flex; align-items: center; justify-content: center; }
-.stats-icon.blue { background:#435ebe; } .stats-icon.red { background:#dc3545; } .stats-icon.green { background:#198754; }
+.stats-icon { 
+    width: 3rem; 
+    height: 3rem; 
+    border-radius: .5rem; 
+    display: flex; 
+    align-items: center; 
+    justify-content: center; 
+}
+.stats-icon.blue { background:#435ebe; } 
+.stats-icon.red { background:#dc3545; } 
+.stats-icon.green { background:#198754; }
+.product-img {
+    background-color: #f8f9fa;
+}
+.table-responsive {
+    overflow-x: auto;
+}
 </style>
 @endsection
 
@@ -218,95 +248,376 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', () => {
+    // ==================== DOM ELEMENTS ====================
     const search = document.getElementById('jsSearchInput');
     const category = document.getElementById('jsCategoryFilter');
+    const sortSelect = document.getElementById('jsSort');
     const btnExport = document.getElementById('btnExport');
-    const tbody = document.getElementById('productTableBody');
     const importInput = document.getElementById('importExcelInput');
     const previewModalEl = document.getElementById('previewModal');
-    const previewModal = new bootstrap.Modal(previewModalEl);
+    const resetBtn = document.getElementById('jsResetBtn');
+    let previewModal = null;
+    
+    // Inisialisasi modal jika ada
+    if (previewModalEl) {
+        previewModal = new bootstrap.Modal(previewModalEl);
+    }
 
-    /** 1. RESET LOGIC (PENTING UNTUK BATAL) **/
-    window.resetImport = function() {
-        importInput.value = ""; // Clear file path
-        document.getElementById('previewHead').innerHTML = "";
-        document.getElementById('previewBody').innerHTML = "";
-    };
-
-    // Trigger reset jika modal ditutup (klik luar, tombol X, atau tombol Batal)
-    previewModalEl.addEventListener('hidden.bs.modal', resetImport);
-
-    /** 2. LIVE FILTER & EXPORT URL **/
-    const updateView = () => {
-        const keyword = search.value.toLowerCase();
-        const catValue = category.value.toLowerCase();
-        
-        // Update Link Export
-        const url = new URL("{{ route('admin.products.export') }}");
-        url.searchParams.set('search', search.value);
-        url.searchParams.set('category', category.value);
-        btnExport.href = url.href;
-
-        document.querySelectorAll('.product-row').forEach(row => {
-            const name = row.querySelector('.product-name').textContent.toLowerCase();
-            const sku = row.querySelector('code').textContent.toLowerCase();
-            const kategori = row.querySelector('.product-category').textContent.trim().toLowerCase();
-            row.style.display = (name.includes(keyword) || sku.includes(keyword)) && (!catValue || kategori === catValue) ? '' : 'none';
-        });
-    };
-
-    /** 3. IMPORT PREVIEW **/
-    importInput.addEventListener('change', function(e) {
-        const file = e.target.files[0];
-        if (!file) return;
-
-        // Validasi Ekstensi
-        const ext = file.name.split('.').pop().toLowerCase();
-        if(!['xlsx', 'xls'].includes(ext)) {
-            alert("Format file harus Excel!");
-            resetImport();
-            return;
-        }
-
-        const reader = new FileReader();
-        reader.onload = function(e) {
-            try {
-                const workbook = XLSX.read(new Uint8Array(e.target.result), {type: 'array'});
-                const data = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], {header: 1});
-                
-                if (data.length > 0) {
-                    let headHtml = "<tr>"; data[0].forEach(h => headHtml += `<th>${h || ''}</th>`); headHtml += "</tr>";
-                    document.getElementById('previewHead').innerHTML = headHtml;
-
-                    let bodyHtml = "";
-                    for (let i = 1; i < Math.min(data.length, 11); i++) {
-                        bodyHtml += "<tr>"; data[i].forEach(c => bodyHtml += `<td>${c || '-'}</td>`); bodyHtml += "</tr>";
-                    }
-                    document.getElementById('previewBody').innerHTML = bodyHtml;
-                    previewModal.show();
-                }
-            } catch (err) {
-                alert("Gagal membaca file Excel!");
-                resetImport();
+    // ==================== FIX 1: GAMBAR TIDAK ADA ====================
+    function fixImages() {
+        document.querySelectorAll('.product-img').forEach(img => {
+            const placeholder = img.getAttribute('data-fallback') || 'https://via.placeholder.com/45?text=No+Image';
+            
+            // Cek apakah src valid
+            const currentSrc = img.src;
+            if (!currentSrc || currentSrc === '' || currentSrc.includes('placeholder') || currentSrc === window.location.href) {
+                img.src = placeholder;
+                return;
             }
-        };
-        reader.readAsArrayBuffer(file);
+            
+            // Handle error loading gambar
+            img.onerror = function() {
+                if (this.src !== placeholder) {
+                    this.src = placeholder;
+                    this.onerror = null; // Prevent infinite loop
+                }
+            };
+        });
+    }
+    
+    // Jalankan fix gambar
+    fixImages();
+
+    // ==================== FUNGSI GET DATA ====================
+    function getAllRows() {
+        return Array.from(document.querySelectorAll('#productTableBody .product-row'));
+    }
+
+    // ==================== FILTER (CASE-INSENSITIVE) ====================
+    function filterRows(rows) {
+        const keyword = search.value.trim().toLowerCase();
+        const catValue = category.value.toLowerCase();
+
+        if (rows.length === 0) return rows;
+
+        return rows.filter(row => {
+            const nameEl = row.querySelector('.product-name');
+            const skuEl = row.querySelector('code');
+            const categoryEl = row.querySelector('.product-category');
+            
+            if (!nameEl || !skuEl) return true;
+            
+            const name = nameEl.textContent.toLowerCase();
+            const sku = skuEl.textContent.toLowerCase();
+            const kategori = categoryEl ? categoryEl.textContent.trim().toLowerCase() : '';
+            
+            const matchSearch = keyword === '' || name.includes(keyword) || sku.includes(keyword);
+            const matchCategory = catValue === '' || kategori === catValue;
+            
+            return matchSearch && matchCategory;
+        });
+    }
+
+    // ==================== SORTING (FIX HARGA) ====================
+    function sortRows(rows, sortBy) {
+        const sortedRows = [...rows];
+        
+        if (sortBy === '') return sortedRows;
+        
+        switch(sortBy) {
+            case 'stok_asc':
+                sortedRows.sort((a, b) => {
+                    let stokA = parseInt(a.dataset.stok);
+                    let stokB = parseInt(b.dataset.stok);
+                    
+                    if (isNaN(stokA)) {
+                        const stokCell = a.querySelector('.product-stok, td:nth-child(5)');
+                        if (stokCell) {
+                            const stokText = stokCell.textContent.replace(/[^0-9]/g, '');
+                            stokA = parseInt(stokText) || 0;
+                        }
+                    }
+                    if (isNaN(stokB)) {
+                        const stokCell = b.querySelector('.product-stok, td:nth-child(5)');
+                        if (stokCell) {
+                            const stokText = stokCell.textContent.replace(/[^0-9]/g, '');
+                            stokB = parseInt(stokText) || 0;
+                        }
+                    }
+                    return stokA - stokB;
+                });
+                break;
+            case 'stok_desc':
+                sortedRows.sort((a, b) => {
+                    let stokA = parseInt(a.dataset.stok);
+                    let stokB = parseInt(b.dataset.stok);
+                    
+                    if (isNaN(stokA)) {
+                        const stokCell = a.querySelector('.product-stok, td:nth-child(5)');
+                        if (stokCell) {
+                            const stokText = stokCell.textContent.replace(/[^0-9]/g, '');
+                            stokA = parseInt(stokText) || 0;
+                        }
+                    }
+                    if (isNaN(stokB)) {
+                        const stokCell = b.querySelector('.product-stok, td:nth-child(5)');
+                        if (stokCell) {
+                            const stokText = stokCell.textContent.replace(/[^0-9]/g, '');
+                            stokB = parseInt(stokText) || 0;
+                        }
+                    }
+                    return stokB - stokA;
+                });
+                break;
+            case 'harga_asc':
+                sortedRows.sort((a, b) => {
+                    let hargaA = parseInt(a.dataset.harga);
+                    let hargaB = parseInt(b.dataset.harga);
+                    
+                    if (isNaN(hargaA)) {
+                        const hargaCell = a.querySelector('.product-price, td:nth-child(4)');
+                        if (hargaCell) {
+                            const hargaText = hargaCell.textContent.replace(/[^0-9]/g, '');
+                            hargaA = parseInt(hargaText) || 0;
+                        }
+                    }
+                    if (isNaN(hargaB)) {
+                        const hargaCell = b.querySelector('.product-price, td:nth-child(4)');
+                        if (hargaCell) {
+                            const hargaText = hargaCell.textContent.replace(/[^0-9]/g, '');
+                            hargaB = parseInt(hargaText) || 0;
+                        }
+                    }
+                    return hargaA - hargaB;
+                });
+                break;
+            case 'harga_desc':
+                sortedRows.sort((a, b) => {
+                    let hargaA = parseInt(a.dataset.harga);
+                    let hargaB = parseInt(b.dataset.harga);
+                    
+                    if (isNaN(hargaA)) {
+                        const hargaCell = a.querySelector('.product-price, td:nth-child(4)');
+                        if (hargaCell) {
+                            const hargaText = hargaCell.textContent.replace(/[^0-9]/g, '');
+                            hargaA = parseInt(hargaText) || 0;
+                        }
+                    }
+                    if (isNaN(hargaB)) {
+                        const hargaCell = b.querySelector('.product-price, td:nth-child(4)');
+                        if (hargaCell) {
+                            const hargaText = hargaCell.textContent.replace(/[^0-9]/g, '');
+                            hargaB = parseInt(hargaText) || 0;
+                        }
+                    }
+                    return hargaB - hargaA;
+                });
+                break;
+            default:
+                break;
+        }
+        
+        return sortedRows;
+    }
+
+    // ==================== RENDER UTAMA ====================
+    function renderTable() {
+        const allRows = getAllRows();
+        
+        if (allRows.length === 0) return;
+        
+        let filteredRows = filterRows(allRows);
+        const sortValue = sortSelect.value;
+        
+        if (sortValue) {
+            filteredRows = sortRows(filteredRows, sortValue);
+        }
+        
+        // Sembunyikan semua baris
+        allRows.forEach(row => row.style.display = 'none');
+        
+        // Tampilkan baris yang sudah difilter & disortir
+        filteredRows.forEach(row => row.style.display = '');
+        
+        // Update export link
+        if (btnExport) {
+            const url = new URL(btnExport.href, window.location.origin);
+            url.searchParams.set('search', search.value);
+            url.searchParams.set('category', category.value);
+            btnExport.href = url.toString();
+        }
+        
+        // Update statistik jumlah produk yang tampil
+        updateStatsCount(filteredRows.length, allRows.length);
+    }
+    
+    // Update statistik
+    function updateStatsCount(visibleCount, totalCount) {
+        const totalProdukElement = document.querySelector('.stats-icon.blue ~ h6 ~ h3, .stats-icon.blue + div + h3');
+        if (totalProdukElement) {
+            const originalTotal = parseInt(totalProdukElement.getAttribute('data-original')) || {{ $data->total() }};
+            if (!totalProdukElement.getAttribute('data-original')) {
+                totalProdukElement.setAttribute('data-original', originalTotal);
+            }
+            if (visibleCount !== totalCount) {
+                totalProdukElement.innerHTML = `${visibleCount} / ${originalTotal}`;
+                totalProdukElement.style.fontSize = '1.3rem';
+            } else {
+                totalProdukElement.innerHTML = originalTotal;
+                totalProdukElement.style.fontSize = '';
+            }
+        }
+    }
+
+    // ==================== RESET ====================
+    function resetFilters() {
+        if (search) search.value = '';
+        if (category) category.value = '';
+        if (sortSelect) sortSelect.value = '';
+        renderTable();
+    }
+
+    // ==================== EVENT LISTENER ====================
+    if (search) search.addEventListener('input', renderTable);
+    if (category) category.addEventListener('change', renderTable);
+    if (sortSelect) sortSelect.addEventListener('change', renderTable);
+    if (resetBtn) resetBtn.addEventListener('click', resetFilters);
+
+    // ==================== DELETE CONFIRMATION ====================
+    document.querySelectorAll('.delete-confirm').forEach(button => {
+        button.addEventListener('click', (e) => {
+            if (!confirm('Apakah Anda yakin ingin menghapus produk ini?')) {
+                e.preventDefault();
+            }
+        });
     });
 
-    /** 4. IMAGE TIMEOUT **/
-    document.querySelectorAll('.product-img').forEach(img => {
-        if (!img.complete) {
-            img.timer = setTimeout(() => { if(!img.complete) img.src = img.getAttribute('data-fallback'); }, 5000);
+    // ==================== IMPORT PREVIEW ====================
+    if (importInput) {
+        importInput.addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const ext = file.name.split('.').pop().toLowerCase();
+            if(!['xlsx', 'xls'].includes(ext)) {
+                alert("Format file harus Excel!");
+                resetImport();
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const workbook = XLSX.read(new Uint8Array(e.target.result), {type: 'array'});
+                    const data = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], {header: 1});
+                    
+                    if (data && data.length > 0) {
+                        // Header
+                        let headHtml = "<tr>"; 
+                        if (data[0]) {
+                            data[0].forEach(h => headHtml += `<th>${h || ''}</th>`);
+                        }
+                        headHtml += "</tr>";
+                        const previewHead = document.getElementById('previewHead');
+                        if (previewHead) previewHead.innerHTML = headHtml;
+
+                        // Body (max 10 rows)
+                        let bodyHtml = "";
+                        for (let i = 1; i < Math.min(data.length, 11); i++) {
+                            bodyHtml += "<tr>"; 
+                            if (data[i]) {
+                                data[i].forEach(c => bodyHtml += `<td>${c !== undefined && c !== null ? c : '-'}</td>`);
+                            }
+                            bodyHtml += "</tr>";
+                        }
+                        const previewBody = document.getElementById('previewBody');
+                        if (previewBody) previewBody.innerHTML = bodyHtml;
+                        
+                        if (previewModal) previewModal.show();
+                    } else {
+                        alert("File Excel kosong!");
+                        resetImport();
+                    }
+                } catch (err) {
+                    console.error(err);
+                    alert("Gagal membaca file Excel! Pastikan format file benar.");
+                    resetImport();
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        });
+    }
+
+    window.resetImport = function() {
+        if (importInput) importInput.value = "";
+        const previewHead = document.getElementById('previewHead');
+        const previewBody = document.getElementById('previewBody');
+        if (previewHead) previewHead.innerHTML = "";
+        if (previewBody) previewBody.innerHTML = "";
+    };
+
+    if (previewModalEl) {
+        previewModalEl.addEventListener('hidden.bs.modal', window.resetImport);
+    }
+
+    window.submitImport = function() {
+        const finalForm = document.getElementById('finalImportForm');
+        if (finalForm) finalForm.submit();
+    };
+
+    // ==================== ENSURE DATA ATTRIBUTES ====================
+    function ensureDataAttributes() {
+        document.querySelectorAll('.product-row').forEach(row => {
+            // Set data-harga jika belum ada
+            if (!row.dataset.harga || row.dataset.harga === 'NaN' || row.dataset.harga === '0') {
+                const hargaCell = row.querySelector('.product-price, td:nth-child(4)');
+                if (hargaCell) {
+                    const hargaText = hargaCell.textContent.replace(/[^0-9]/g, '');
+                    const harga = parseInt(hargaText) || 0;
+                    row.dataset.harga = harga;
+                } else {
+                    row.dataset.harga = 0;
+                }
+            }
+            
+            // Set data-stok jika belum ada
+            if (!row.dataset.stok || row.dataset.stok === 'NaN') {
+                const stokSpan = row.querySelector('.product-stok span, td:nth-child(5) span, .badge');
+                if (stokSpan) {
+                    const stokText = stokSpan.textContent.replace(/[^0-9]/g, '');
+                    const stok = parseInt(stokText) || 0;
+                    row.dataset.stok = stok;
+                } else {
+                    row.dataset.stok = 0;
+                }
+            }
+        });
+    }
+    
+    ensureDataAttributes();
+    
+    // ==================== MUTATION OBSERVER ====================
+    const observer = new MutationObserver(function(mutations) {
+        let needsUpdate = false;
+        mutations.forEach(function(mutation) {
+            if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
+                needsUpdate = true;
+            }
+        });
+        if (needsUpdate) {
+            fixImages();
+            ensureDataAttributes();
+            renderTable();
         }
     });
-
-    search.addEventListener('input', updateView);
-    category.addEventListener('change', updateView);
-    document.getElementById('jsResetBtn').addEventListener('click', () => { 
-        search.value = ''; category.value = ''; updateView(); 
-    });
-
-    updateView(); // Initial sync
+    
+    const tableBody = document.getElementById('productTableBody');
+    if (tableBody) {
+        observer.observe(tableBody, { childList: true, subtree: true });
+    }
+    
+    // Render awal
+    renderTable();
 });
 </script>
 @endpush

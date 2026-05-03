@@ -8,6 +8,7 @@ use App\Http\Controllers\Admin\PointRedemptionsController;
 use App\Http\Controllers\Admin\PointRewardController;
 use App\Http\Controllers\Admin\ProductController;
 use App\Http\Controllers\Admin\PromotionsController;
+use App\Http\Controllers\Admin\DashboardController;
 use Illuminate\Support\Facades\Log;
 use App\Http\Controllers\Admin\ReportsController;
 use App\Http\Controllers\Admin\TransactionController;
@@ -70,9 +71,7 @@ Route::middleware(['auth:customers'])->prefix('/customer')->group(function () {
 */
 Route::middleware(['auth:web', 'role:admin'])->prefix('admin')->group(function () {
     
-    Route::get('/dashboard', function () {
-        return view('pages.admin.index');
-    })->name('admin.dashboard');
+    Route::get('/dashboard', [DashboardController::class, 'index'])->name('admin.dashboard');
 
     // User Management
     Route::controller(UserController::class)->group(function () {
