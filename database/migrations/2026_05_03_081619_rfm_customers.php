@@ -11,37 +11,29 @@ return new class extends Migration
      */
     public function up(): void
     {
-        // Tabel skor validitas DBI
-        Schema::create('rfm_dbi_scores', function (Blueprint $table) {
+        // Tabel data mentah
+        Schema::create('rfm_customer_raw', function (Blueprint $table) {
             $table->id();
             $table->foreignId('calculation_batch_id')
                 ->constrained('rfm_calculation_batches')
                 ->cascadeOnDelete();
-            $table->integer('k');
-            $table->decimal('dbi_score', 10, 6);
-            $table->json('cluster_details')->nullable();
-            $table->timestamps();
-        });
-
-        // Tabel skor RFM dan segmen final (untuk scatter plot)
-        Schema::create('rfm_scores', function (Blueprint $table) {
-            $table->id();
-            $table->foreignId('customer_id')
-                ->constrained('customers')
-                ->cascadeOnDelete();
-            $table->foreignId('calculation_batch_id')
-                ->constrained('rfm_calculation_batches')
-                ->cascadeOnDelete();
+            $table->unsignedBigInteger('customer_id');
             $table->integer('recency_days');
             $table->integer('frequency');
             $table->decimal('monetary', 20, 2);
+            $table->timestamps();
+        });
+
+        // Tabel data normalisasi (skala 0-1)
+        Schema::create('rfm_customer_normalized', function (Blueprint $table) {
+            $table->id();
+            $table->foreignId('calculation_batch_id')
+                ->constrained('rfm_calculation_batches')
+                ->cascadeOnDelete();
+            $table->unsignedBigInteger('customer_id');
             $table->decimal('recency_norm', 10, 6);
             $table->decimal('frequency_norm', 10, 6);
             $table->decimal('monetary_norm', 10, 6);
-            $table->decimal('rfm_score', 10, 6);
-            $table->integer('cluster_id');
-            $table->string('segment_name');
-            $table->decimal('distance_to_centroid', 10, 6);
             $table->timestamps();
         });
     }
@@ -51,7 +43,7 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('rfm_scores');
-        Schema::dropIfExists('rfm_dbi_scores');
+        Schema::dropIfExists('rfm_customer_normalized');
+        Schema::dropIfExists('rfm_customer_raw');
     }
 };

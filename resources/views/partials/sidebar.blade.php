@@ -51,15 +51,6 @@
                 
                 {{-- SECTION 1: DASHBOARD (Semua Role) --}}
                 <li class="sidebar-title">Menu Utama</li>
-                @php
-                    $dashboardRoute = match($role) {
-                        'admin' => 'admin.dashboard',
-                        'manager' => 'manager.dashboard',
-                        'kasir' => 'kasir.dashboard',
-                        default => 'login'
-                    };
-                @endphp
-
                 <li class="sidebar-item {{ is_active($dashboardRoute) }}">
                     <a href="{{ route($dashboardRoute) }}" class="sidebar-link">
                         <i class="bi bi-speedometer2"></i>
@@ -85,27 +76,43 @@
                     </li>
                 @endif
 
-                {{-- SECTION 3: TRANSAKSI (Semua Role: Admin, Manager, Kasir) --}}
-                <li class="sidebar-title">Transaksi</li>
-                @php $trxRoutes = ['admin.transactions*']; @endphp
-                <li class="sidebar-item has-sub {{ is_open($trxRoutes) }}">
-                    <a href="#" class="sidebar-link">
-                        <i class="bi bi-receipt-cutoff"></i>
-                        <span>Manajemen Penjualan</span>
-                    </a>
-                    <ul class="submenu {{ is_open($trxRoutes) }}" style="{{ is_show($trxRoutes) }}">
-                        <li class="submenu-item {{ is_active('admin.transactions.create') }}">
-                            <a href="{{ route('admin.transactions.create') }}">Input Penjualan (POS)</a>
-                        </li>
-                        <li class="submenu-item {{ is_active('admin.transactions') }}">
-                            <a href="{{ route('admin.transactions') }}">Data Transaksi</a>
-                        </li>
-                    </ul>
-                </li>
+                {{-- SECTION 3: TRANSAKSI (Hanya Admin & Kasir, Manager TIDAK ADA) --}}
+                @if(in_array($role, ['admin', 'kasir']))
+                    <li class="sidebar-title">Transaksi</li>
+                    @php $trxRoutes = ['admin.transactions*']; @endphp
+                    <li class="sidebar-item has-sub {{ is_open($trxRoutes) }}">
+                        <a href="#" class="sidebar-link">
+                            <i class="bi bi-receipt-cutoff"></i>
+                            <span>Manajemen Penjualan</span>
+                        </a>
+                        <ul class="submenu {{ is_open($trxRoutes) }}" style="{{ is_show($trxRoutes) }}">
+                            <li class="submenu-item {{ is_active('admin.transactions.create') }}">
+                                <a href="{{ route('admin.transactions.create') }}">Input Penjualan (POS)</a>
+                            </li>
+                            <li class="submenu-item {{ is_active('admin.transactions') }}">
+                                <a href="{{ route('admin.transactions') }}">Data Transaksi</a>
+                            </li>
+                        </ul>
+                    </li>
+                @endif
 
                 {{-- SECTION 4: STRATEGY & ANALISIS (Hanya Admin & Manager) --}}
                 @if(in_array($role, ['admin', 'manager']))
                     <li class="sidebar-title">Marketing Strategy</li>
+
+                    {{-- Analisis Pelanggan --}}
+                    @php $analysisRoutes = ['rfm.index*']; @endphp
+                    <li class="sidebar-item has-sub {{ is_open($analysisRoutes) }}">
+                        <a href="#" class="sidebar-link">
+                            <i class="bi bi-person-check"></i>
+                            <span>Analisis Pelanggan</span>
+                        </a>
+                        <ul class="submenu {{ is_open($analysisRoutes) }}" style="{{ is_show($analysisRoutes) }}">
+                            <li class="submenu-item {{ is_active('rfm.index*') }}">
+                                <a href="{{ route('rfm.index') }}">Analisis RFM</a>
+                            </li>
+                        </ul>
+                    </li>
 
                     {{-- Promosi & Loyalty --}}
                     @php 
@@ -117,31 +124,29 @@
                             <span>Promosi & Loyalty</span>
                         </a>
                         <ul class="submenu {{ is_open($promoRoutes) }}" style="{{ is_show($promoRoutes) }}">
-                            <li class="submenu-item {{ is_active('admin.promo*') }}"><a href="{{ route('admin.promo') }}">Data Kupon Promo</a></li>
-                            
+                            <li class="submenu-item {{ is_active('admin.promo*') }}"><a href="{{ route('admin.promo') }}">Kupon Promo</a></li>
                             <hr class="mx-3 my-2" style="opacity: 0.1; border-color: #fff;">
-                            
                             <li class="submenu-item {{ is_active('admin.loyalty.rule*') }}"><a href="{{route('admin.loyalty.rule')}}">Aturan Poin</a></li>
                             <li class="submenu-item {{ is_active('admin.loyalty.rewards*') }}"><a href="{{ route('admin.loyalty.rewards') }}">Katalog Hadiah</a></li>
                             <li class="submenu-item {{ is_active('admin.loyalty.redemptions*') }}"><a href="{{ route('admin.loyalty.redemptions.index') }}">Riwayat Penukaran</a></li>
-                            
-                            {{-- LOG MUTASI POIN TETAP DI SINI --}}
                             <li class="submenu-item {{ is_active('admin.loyalty.points*') }}"><a href="{{route('admin.loyalty.points.index')}}">Log Mutasi Poin</a></li>
                         </ul>
                     </li>
 
-                    {{-- Analisis & Laporan --}}
-                    @php $analisisRoutes = ['rfm.index*', 'admin.reports.transactions*', 'admin.reports.products*']; @endphp
-                    <li class="sidebar-item has-sub {{ is_open($analisisRoutes) }}">
+                    {{-- Laporan --}}
+                    @php $reportRoutes = ['admin.reports.transactions*', 'admin.product.reports*']; @endphp
+                    <li class="sidebar-item has-sub {{ is_open($reportRoutes) }}">
                         <a href="#" class="sidebar-link">
-                            <i class="bi bi-bar-chart-line"></i>
-                            <span>Analisis & Laporan</span>
+                            <i class="bi bi-file-earmark-bar-graph"></i>
+                            <span>Laporan Penjualan</span>
                         </a>
-                        <ul class="submenu {{ is_open($analisisRoutes) }}" style="{{ is_show($analisisRoutes) }}">
-                            <li class="submenu-item {{ is_active('rfm.index*') }}"><a href="{{ route('rfm.index') }}">Analisis RFM</a></li>
-                            <hr class="mx-3 my-2" style="opacity: 0.1; border-color: #fff;">
-                            <li class="submenu-item {{ is_active('admin.reports.transactions*') }}"><a href="{{ route('admin.reports.transactions') }}">Laporan Penjualan</a></li>
-                            <li class="submenu-item {{ is_active('admin.product.reports*') }}"><a href="{{ route('admin.product.reports') }}">Laporan Produk Terlaris</a></li>
+                        <ul class="submenu {{ is_open($reportRoutes) }}" style="{{ is_show($reportRoutes) }}">
+                            <li class="submenu-item {{ is_active('admin.reports.transactions*') }}">
+                                <a href="{{ route('admin.reports.transactions') }}">Rekap Transaksi</a>
+                            </li>
+                            <li class="submenu-item {{ is_active('admin.product.reports*') }}">
+                                <a href="{{ route('admin.product.reports') }}">Produk Terlaris</a>
+                            </li>
                         </ul>
                     </li>
                 @endif

@@ -8,13 +8,15 @@ use App\Http\Controllers\Admin\PointRedemptionsController;
 use App\Http\Controllers\Admin\PointRewardController;
 use App\Http\Controllers\Admin\ProductController;
 use App\Http\Controllers\Admin\PromotionsController;
+use Illuminate\Support\Facades\Log;
 use App\Http\Controllers\Admin\ReportsController;
 use App\Http\Controllers\Admin\TransactionController;
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Customers\CustomersController;
-use App\Http\Controllers\kasir\KasirController;
+use App\Http\Controllers\Kasir\KasirController;
 use App\Http\Controllers\RFM\RfmController;
+use App\Models\RfmCalculationBatch;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -230,17 +232,43 @@ Route::middleware(['auth:web', 'role:admin'])->prefix('admin')->group(function (
 });
 
 Route::middleware(['auth', 'role:admin,manager'])->prefix('rfm')->name('rfm.')->group(function () {
-    Route::get('/',                             [RfmController::class, 'index'])              ->name('index');
-    Route::get('/calculate',                    [RfmController::class, 'create'])             ->name('calculate');
-    Route::post('/calculate',                   [RfmController::class, 'store'])              ->name('store');
-    Route::get('/batch/{batch}',                [RfmController::class, 'showBatch'])          ->name('batch.show');
-    Route::patch('/batch/{batch}/labels',       [RfmController::class, 'updateClusterLabels'])->name('batch.labels');
-    Route::get('/customer/{customerId}/history',[RfmController::class, 'customerHistory'])    ->name('customer.history');
- 
-    // API (JSON)
-    Route::get('/api/batch/{batch}/scatter',    [RfmController::class, 'scatterData'])        ->name('api.scatter');
-    Route::get('/api/elbow',                    [RfmController::class, 'elbowData'])          ->name('elbow');
+   // Halaman Dashboard Utama (Analisis RFM)
+    Route::get('/', [RfmController::class, 'showDashboard'])->name('index');
+    
+    // Halaman Informasi Metodologi
+    Route::get('/about', [RfmController::class, 'showAbout'])->name('about');
+    
+    // Halaman Form Kalkulasi Baru
+    Route::get('/calculate', [RfmController::class, 'showCalculateForm'])->name('calculate');
+    
+    // Halaman Detail Batch
+    Route::get('/batch/{batchId}', [RfmController::class, 'showBatchDetail'])->name('batch.detail');
+    
+    // Halaman Riwayat Pelanggan
+    Route::get('/customer/{customerId}/history', [RfmController::class, 'showCustomerHistory'])->name('customer.history');
+
+    // =============================================================
+    // API ROUTES (Data JSON untuk Fetch/AJAX)
+    // =============================================================
+    
+    Route::get('/api/dashboard', [RfmController::class, 'index'])->name('api.dashboard');
+    Route::post('/api/calculate', [RfmController::class, 'calculate'])->name('api.calculate');
+    Route::get('/api/elbow', [RfmController::class, 'elbow'])->name('api.elbow');
+    Route::get('/api/dbi-comparison', [RfmController::class, 'dbiComparison'])->name('api.dbi_compare');
+    Route::get('/api/batches', [RfmController::class, 'batches'])->name('api.batches');
+    Route::get('/api/batches/{batch}', [RfmController::class, 'batchDetail'])->name('api.batch_detail');
+    Route::get('/api/batches/{batch}/raw', [RfmController::class, 'rawData'])->name('api.raw');
+    Route::get('/api/batches/{batch}/normalized', [RfmController::class, 'normalizedData'])->name('api.normalized');
+    Route::get('/api/batches/{batch}/iterations', [RfmController::class, 'iterations'])->name('api.iterations');
+    Route::get('/api/batches/{batch}/centroids', [RfmController::class, 'centroids'])->name('api.centroids');
+    Route::get('/api/batches/{batch}/assignments', [RfmController::class, 'assignments'])->name('api.assignments');
+    Route::get('/api/batches/{batch}/scores', [RfmController::class, 'scores'])->name('api.scores');
+    Route::get('/api/batches/{batch}/scatter', [RfmController::class, 'scatterData'])->name('api.scatter');
+    Route::get('/api/batches/{batch}/dbi', [RfmController::class, 'dbi'])->name('api.dbi_detail');
+    Route::get('/api/customers/{customer}/history', [RfmController::class, 'customerHistory'])->name('api.customer_history');
+    Route::get('/api/batches/{batch}/segment-history', [RfmController::class, 'segmentHistory'])->name('api.segment_history');
 });
+
 
 /*
 |--------------------------------------------------------------------------

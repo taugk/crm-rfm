@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Http\Controllers\kasir;
+namespace App\Http\Controllers\Kasir;
 
 use App\Http\Controllers\Controller;
 use App\Models\Customers;
@@ -16,71 +16,71 @@ use Illuminate\Support\Facades\Log;
 class KasirController extends Controller
 {
     public function index()
-{
-    $today = Carbon::today();
+    {
+        $today = Carbon::today();
 
-    // Transaksi hari ini
-    $transaksiHariIni = Transaction::whereDate('transaction_date', $today)
-        ->where('status', 'completed')
-        ->count();
-
-    // Pendapatan hari ini
-    $pendapatanHariIni = Transaction::whereDate('transaction_date', $today)
-        ->where('status', 'completed')
-        ->sum('total_price');
-
-    // Produk terjual
-    $produkTerjual = TransactionDetail::whereHas('transaction', function ($q) use ($today) {
-        $q->whereDate('transaction_date', $today)
-          ->where('status', 'completed');
-    })->sum('quantity');
-
-    // Pelanggan hari ini
-    $pelangganHariIni = Transaction::whereDate('transaction_date', $today)
-        ->distinct('customer_id')
-        ->count('customer_id');
-
-    // Top produk
-    $topProduk = DB::table('transactions_details')
-        ->join('product_details', 'transactions_details.product_detail_id', '=', 'product_details.id')
-        ->join('products', 'product_details.product_id', '=', 'products.id')
-        ->select('products.name', DB::raw('SUM(transactions_details.quantity) as total'))
-        ->groupBy('products.name')
-        ->orderByDesc('total')
-        ->limit(5)
-        ->get();
-
-    // Recent transaksi
-    $recentTransaksi = Transaction::with('customer')
-        ->latest()
-        ->limit(5)
-        ->get();
-
-    // Chart (7 hari)
-    $labels = [];
-    $dataTransaksi = [];
-
-    for ($i = 6; $i >= 0; $i--) {
-        $date = Carbon::today()->subDays($i);
-
-        $labels[] = $date->format('d M');
-
-        $dataTransaksi[] = Transaction::whereDate('transaction_date', $date)
+        // Transaksi hari ini
+        $transaksiHariIni = Transaction::whereDate('transaction_date', $today)
             ->where('status', 'completed')
             ->count();
-    }
 
-    return view('pages.kasir.index', compact(
-        'transaksiHariIni',
-        'pendapatanHariIni',
-        'produkTerjual',
-        'pelangganHariIni',
-        'topProduk',
-        'recentTransaksi',
-        'labels',
-        'dataTransaksi'
-    ));
-}
+        // Pendapatan hari ini
+        $pendapatanHariIni = Transaction::whereDate('transaction_date', $today)
+            ->where('status', 'completed')
+            ->sum('total_price');
+
+        // Produk terjual
+        $produkTerjual = TransactionDetail::whereHas('transaction', function ($q) use ($today) {
+            $q->whereDate('transaction_date', $today)
+            ->where('status', 'completed');
+        })->sum('quantity');
+
+        // Pelanggan hari ini
+        $pelangganHariIni = Transaction::whereDate('transaction_date', $today)
+            ->distinct('customer_id')
+            ->count('customer_id');
+
+        // Top produk
+        $topProduk = DB::table('transactions_details')
+            ->join('product_details', 'transactions_details.product_detail_id', '=', 'product_details.id')
+            ->join('products', 'product_details.product_id', '=', 'products.id')
+            ->select('products.name', DB::raw('SUM(transactions_details.quantity) as total'))
+            ->groupBy('products.name')
+            ->orderByDesc('total')
+            ->limit(5)
+            ->get();
+
+        // Recent transaksi
+        $recentTransaksi = Transaction::with('customer')
+            ->latest()
+            ->limit(5)
+            ->get();
+
+        // Chart (7 hari)
+        $labels = [];
+        $dataTransaksi = [];
+
+        for ($i = 6; $i >= 0; $i--) {
+            $date = Carbon::today()->subDays($i);
+
+            $labels[] = $date->format('d M');
+
+            $dataTransaksi[] = Transaction::whereDate('transaction_date', $date)
+                ->where('status', 'completed')
+                ->count();
+        }
+
+        return view('pages.kasir.index', compact(
+            'transaksiHariIni',
+            'pendapatanHariIni',
+            'produkTerjual',
+            'pelangganHariIni',
+            'topProduk',
+            'recentTransaksi',
+            'labels',
+            'dataTransaksi'
+        ));
+    }
 
 
     public function createTransactions()

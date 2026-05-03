@@ -88,7 +88,7 @@
                             <div class="col-12 mb-3">
                                 <label class="form-label">Nama Lengkap</label>
                                 <input type="text" name="name" class="form-control @error('name') is-invalid @enderror" 
-                                       placeholder="Taufik Nurul Hidayat" value="{{ old('name') }}" required>
+                                       placeholder="Melvin Alvian" value="{{ old('name') }}" required>
                                 @error('name') <div class="invalid-feedback">{{ $message }}</div> @enderror
                             </div>
 

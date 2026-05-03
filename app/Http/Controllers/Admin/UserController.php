@@ -28,38 +28,38 @@ class UserController extends Controller
     }
 
     public function store(Request $request)
-{
-    // 1. Validasi sesuai dengan input di Form
-    $request->validate([
-        'name'          => 'required|string|max:255',
-        'email'         => 'required|email|unique:users,email',
-        'phone'         => 'nullable|string|max:20', 
-        'role'          => 'required|in:admin,manager,kasir',
-        'password'      => 'required|string|min:6|confirmed', 
-        'profile_photo' => 'nullable|image|mimes:jpg,jpeg,png|max:2048',
-    ]);
+    {
+        // 1. Validasi sesuai dengan input di Form
+        $request->validate([
+            'name'          => 'required|string|max:255',
+            'email'         => 'required|email|unique:users,email',
+            'phone'         => 'nullable|string|max:20', 
+            'role'          => 'required|in:admin,manager,kasir',
+            'password'      => 'required|string|min:6|confirmed', 
+            'profile_photo' => 'nullable|image|mimes:jpg,jpeg,png|max:2048',
+        ]);
 
-    // 2. Siapkan data untuk disimpan
-    $data = [
-        'name'     => $request->name,
-        'email'    => $request->email,
-        'phone'    => $request->phone,
-        'role'     => $request->role,
-        'password' => bcrypt($request->password),
-    ];
+        // 2. Siapkan data untuk disimpan
+        $data = [
+            'name'     => $request->name,
+            'email'    => $request->email,
+            'phone'    => $request->phone,
+            'role'     => $request->role,
+            'password' => bcrypt($request->password),
+        ];
 
-    // 3. Handle Upload Foto jika ada
-    if ($request->hasFile('profile_photo')) {
-        // Menggunakan method helper uploadImage yang sudah kita buat sebelumnya
-        $data['profile_photo'] = $this->uploadImage($request->file('profile_photo'), $request->name);
+        // 3. Handle Upload Foto jika ada
+        if ($request->hasFile('profile_photo')) {
+            // Menggunakan method helper uploadImage yang sudah kita buat sebelumnya
+            $data['profile_photo'] = $this->uploadImage($request->file('profile_photo'), $request->name);
+        }
+
+        // 4. Eksekusi Create User
+        User::create($data);
+
+        // 5. Redirect ke halaman index dengan pesan sukses
+        return redirect()->route('admin.users')->with('success', 'User berhasil ditambahkan!');
     }
-
-    // 4. Eksekusi Create User
-    User::create($data);
-
-    // 5. Redirect ke halaman index dengan pesan sukses
-    return redirect()->route('admin.users')->with('success', 'User berhasil ditambahkan!');
-}
 
     public function edit($id)
     {

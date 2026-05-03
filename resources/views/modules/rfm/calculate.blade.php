@@ -1,205 +1,218 @@
-{{-- resources/views/pages/admin/rfm/calculate.blade.php --}}
 @extends('layouts.admin')
 
-@section('title', 'Konfigurasi Kalkulasi RFM')
+@section('title', 'Kalkulasi Baru K-Means RFM')
 
 @section('content')
-<div class="page-heading">
-    <div class="page-title">
-        <div class="row">
-            <div class="col-12 col-md-6 order-md-1 order-last">
-                <h3>Konfigurasi Kalkulasi RFM</h3>
-                <p class="text-subtitle text-muted">Atur parameter clustering dan rentang waktu data transaksi.</p>
+<div class="container-fluid">
+    <div class="d-sm-flex align-items-center justify-content-between mb-4">
+        <h1 class="h3 mb-0 text-gray-800">Analisis CRM: K-Means Clustering</h1>
+    </div>
+
+    <div class="row">
+        <!-- Form Konfigurasi -->
+        <div class="col-xl-5 col-lg-6">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">Konfigurasi Algoritma</h6>
+                </div>
+                <div class="card-body">
+                    <form id="rfmCalcForm">
+                        @csrf
+                        <div class="form-group">
+                            <label class="font-weight-bold">Jumlah Cluster (k)</label>
+                            <input type="number" name="k_clusters" class="form-control" min="2" max="10" value="4" required>
+                            <small class="text-muted italic">Tentukan jumlah kelompok pelanggan yang ingin dihasilkan (Rekomendasi: 3-5).</small>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6 form-group">
+                                <label class="font-weight-bold">Dari Tanggal</label>
+                                <input type="date" name="from" class="form-control">
+                            </div>
+                            <div class="col-md-6 form-group">
+                                <label class="font-weight-bold">Sampai Tanggal</label>
+                                <input type="date" name="to" class="form-control" value="{{ date('Y-m-d') }}">
+                            </div>
+                        </div>
+
+                        <hr>
+                        
+                        <div id="calcStatus" class="alert d-none"></div>
+
+                        <button type="submit" id="btnRun" class="btn btn-primary btn-block shadow-sm">
+                            <i class="fas fa-play mr-1"></i> Jalankan Kalkulasi RFM
+                        </button>
+                    </form>
+                </div>
             </div>
-            <div class="col-12 col-md-6 order-md-2 order-first">
-                <nav aria-label="breadcrumb" class="breadcrumb-header float-start float-lg-end">
-                    <ol class="breadcrumb">
-                        <li class="breadcrumb-item"><a href="{{ route('rfm.index') }}">RFM Dashboard</a></li>
-                        <li class="breadcrumb-item active" aria-current="page">Hitung Ulang</li>
-                    </ol>
-                </nav>
+
+            <!-- Panduan Singkat -->
+            <div class="card shadow mb-4 border-left-info">
+                <div class="card-body">
+                    <h6 class="font-weight-bold text-info">Tips Memilih K:</h6>
+                    <p class="small mb-0">Gunakan grafik di samping untuk melihat <b>Davies-Bouldin Index (DBI)</b>. Nilai <b>k</b> dengan skor DBI <b>terendah</b> mengindikasikan pembagian cluster yang paling optimal dan terpisah dengan baik.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Grafik Bantuan (DBI/Elbow Comparison) -->
+        <div class="col-xl-7 col-lg-6">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+                    <h6 class="m-0 font-weight-bold text-primary">Analisis Validitas Cluster (K2 - K10)</h6>
+                    <button class="btn btn-sm btn-light border" onclick="loadComparisonData()">
+                        <i class="fas fa-sync-alt"></i> Refresh Grafik
+                    </button>
+                </div>
+                <div class="card-body">
+                    <div class="chart-area" style="height: 320px;">
+                        <canvas id="comparisonChart"></canvas>
+                    </div>
+                    <hr>
+                    <div class="table-responsive mt-3">
+                        <table class="table table-sm table-bordered text-center small">
+                            <thead class="bg-light">
+                                <tr>
+                                    <th>K</th>
+                                    <th>DBI Score (Lower is Better)</th>
+                                    <th>Interpretasi</th>
+                                </tr>
+                            </thead>
+                            <tbody id="dbi-table-body">
+                                <tr><td colspan="3">Klik refresh untuk memuat data perbandingan...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
-
-    <section class="section">
-        <div class="row">
-            <div class="col-12 col-lg-5">
-                <div class="card shadow-sm">
-                    <div class="card-header">
-                        <h4>Parameter Analisis</h4>
-                    </div>
-                    <div class="card-body">
-                        <form method="POST" action="{{ route('rfm.store') }}" id="calcForm">
-                            @csrf
-
-                            <div class="form-group mb-4">
-                                <label class="form-label fw-bold">Jumlah Cluster (K)</label>
-                                <p class="text-muted small">Tentukan berapa banyak kelompok pelanggan yang ingin dibentuk.</p>
-                                <div class="d-flex align-items-center gap-3">
-                                    <input type="range" id="kRange" name="k_clusters" min="2" max="10"
-                                        value="{{ old('k_clusters', $lastBatch?->k_clusters ?? 5) }}"
-                                        class="form-range flex-grow-1" 
-                                        oninput="document.getElementById('kVal').textContent = this.value">
-                                    <span class="badge bg-primary fs-5" id="kVal" style="min-width:45px;">
-                                        {{ old('k_clusters', $lastBatch?->k_clusters ?? 5) }}
-                                    </span>
-                                </div>
-                                @error('k_clusters')<span class="text-danger small">{{ $message }}</span>@enderror
-                            </div>
-
-                            <div class="row">
-                                <div class="col-12 col-md-6">
-                                    <div class="form-group mb-3">
-                                        <label class="form-label fw-bold">Dari Tanggal</label>
-                                        <input type="date" name="date_from" class="form-control"
-                                            value="{{ old('date_from', now()->subYears(2)->toDateString()) }}">
-                                    </div>
-                                </div>
-                                <div class="col-12 col-md-6">
-                                    <div class="form-group mb-3">
-                                        <label class="form-label fw-bold">Sampai Tanggal</label>
-                                        <input type="date" name="date_to" class="form-control"
-                                            value="{{ old('date_to', now()->toDateString()) }}">
-                                    </div>
-                                </div>
-                            </div>
-
-                            @if($lastBatch)
-                            <div class="alert alert-light-secondary border-0 small py-2 px-3 mb-4">
-                                <i class="bi bi-clock-history me-2"></i>
-                                Kalkulasi terakhir: <strong>{{ $lastBatch->created_at->format('d M Y') }}</strong>
-                            </div>
-                            @endif
-
-                            <div class="d-grid">
-                                <button type="submit" class="btn btn-primary btn-lg" id="submitBtn">
-                                    <i class="bi bi-play-circle-fill me-2"></i> Jalankan Algoritma
-                                </button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            </div>
-
-            <div class="col-12 col-lg-7">
-                <div class="card shadow-sm h-100">
-                    <div class="card-header d-flex justify-content-between align-items-center">
-                        <h4>Elbow Method Optimizer</h4>
-                        <button class="btn btn-sm btn-outline-primary" id="elbowBtn">
-                            <i class="bi bi-graph-up me-1"></i> Analisis SSE
-                        </button>
-                    </div>
-                    <div class="card-body">
-                        <div class="alert alert-light-primary border-0 small mb-4">
-                            <i class="bi bi-lightbulb-fill me-2"></i>
-                            <strong>Tips:</strong> Pilih nilai K pada titik "siku" grafik (di mana penurunan SSE mulai mendatar). Klik pada titik grafik untuk memilih nilai K secara otomatis.
-                        </div>
-                        
-                        <div style="height: 300px;">
-                            <canvas id="elbowChart"></canvas>
-                        </div>
-
-                        <div id="elbowLoader" class="text-center d-none py-5">
-                            <div class="spinner-border text-primary" role="status">
-                                <span class="visually-hidden">Loading...</span>
-                            </div>
-                            <p class="mt-2 text-muted">Sedang mensimulasikan clustering K=2 hingga K=8...</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </section>
 </div>
 @endsection
 
 @push('scripts')
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
-    let elbowChart;
-    const elbowBtn = document.getElementById('elbowBtn');
-    const elbowLoader = document.getElementById('elbowLoader');
-    const chartCanvas = document.getElementById('elbowChart');
+    let myChart;
 
-    elbowBtn.addEventListener('click', async function() {
-        this.disabled = true;
-        chartCanvas.classList.add('d-none');
-        elbowLoader.classList.remove('d-none');
+    // Fungsi menjalankan kalkulasi utama (tidak berubah)
+    document.getElementById('rfmCalcForm').onsubmit = async (e) => {
+        e.preventDefault();
+        const btn = document.getElementById('btnRun');
+        const status = document.getElementById('calcStatus');
+        
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm mr-2"></span>Memproses Pipeline K-Means...';
+        status.className = "alert alert-info";
+        status.innerHTML = "Sistem sedang mengekstraksi data transaksi, melakukan normalisasi, dan menghitung iterasi centroid...";
+        status.classList.remove('d-none');
 
         try {
-            const res = await fetch('{{ route("rfm.elbow") }}?max_k=8');
-            const data = await res.json();
-            const ctx = chartCanvas.getContext('2d');
-            
-            if (elbowChart) elbowChart.destroy();
-            
-            elbowChart = new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels: data.map(d => 'K=' + d.k),
-                    datasets: [{
-                        label: 'SSE (Inertia)',
-                        data: data.map(d => d.sse),
-                        borderColor: '#435ebe',
-                        backgroundColor: 'rgba(67, 94, 190, 0.1)',
-                        borderWidth: 3,
-                        tension: 0.4,
-                        pointRadius: 6,
-                        pointBackgroundColor: '#435ebe',
-                        fill: true,
-                    }]
+            const formData = new FormData(e.target);
+            const response = await fetch("{{ route('rfm.api.calculate') }}", {
+                method: 'POST',
+                headers: {
+                    'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
                 },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: { 
-                        legend: { display: false },
-                        tooltip: {
-                            callbacks: {
-                                label: (ctx) => `Inertia: ${ctx.parsed.y.toLocaleString()}`
-                            }
-                        }
-                    },
-                    scales: {
-                        y: { 
-                            beginAtZero: false,
-                            grid: { color: '#f1f1f1' },
-                            title: { display: true, text: 'Within-Cluster Sum of Squares' }
-                        },
-                        x: { grid: { display: false } }
-                    },
-                    onClick(e, els) {
-                        if (els.length) {
-                            const k = data[els[0].index].k;
-                            document.getElementById('kRange').value = k;
-                            document.getElementById('kVal').textContent = k;
-                            
-                            // Visual feedback
-                            const kValBadge = document.getElementById('kVal');
-                            kValBadge.classList.add('animate__animated', 'animate__pulse');
-                            setTimeout(() => kValBadge.classList.remove('animate__animated', 'animate__pulse'), 500);
-                        }
-                    }
-                }
+                body: JSON.stringify(Object.fromEntries(formData))
             });
 
-            chartCanvas.classList.remove('d-none');
-        } catch(e) {
-            Swal.fire({
-                icon: 'error',
-                title: 'Gagal',
-                text: 'Pastikan sudah ada batch kalkulasi yang sukses sebelumnya untuk melakukan analisis Elbow.'
-            });
-        } finally {
-            elbowLoader.classList.add('d-none');
-            this.disabled = false;
+            const data = await response.json();
+
+            if (response.ok) {
+                status.className = "alert alert-success";
+                status.innerHTML = "<b>Berhasil!</b> Kalkulasi selesai dalam " + data.batch.duration_ms + "ms. Mengalihkan ke hasil...";
+                setTimeout(() => {
+                    window.location.href = "/rfm/batch/" + data.batch_id;
+                }, 1500);
+            } else {
+                throw new Error(data.error || 'Terjadi kesalahan sistem.');
+            }
+        } catch (err) {
+            status.className = "alert alert-danger";
+            status.innerHTML = "<b>Gagal:</b> " + err.message;
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-play mr-1"></i> Jalankan Kalkulasi RFM';
         }
-    });
+    };
 
-    document.getElementById('calcForm').addEventListener('submit', function() {
-        document.getElementById('submitBtn').disabled = true;
-        document.getElementById('submitBtn').innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Memproses Data...';
-    });
+    // Fungsi memuat data perbandingan DBI (K2 - K10) => DIPERBAIKI
+    async function loadComparisonData() {
+        const tbody = document.getElementById('dbi-table-body');
+        tbody.innerHTML = '<tr><td colspan="3"><span class="spinner-border spinner-border-sm"></span> Menghitung perbandingan...</td></tr>';
+
+        try {
+            const res = await fetch("{{ route('rfm.api.dbi_compare') }}");
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const result = await res.json();   // { dbi_results: [...], best_k, ... }
+
+            // Ambil array dari dbi_results
+            const dbiList = result.dbi_results;
+            if (!dbiList || dbiList.length === 0) throw new Error('Data DBI kosong');
+
+            // Render Tabel
+            tbody.innerHTML = dbiList.map(item => `
+                <tr>
+                    <th scope="row">K = ${item.k}</th>
+                    <td class="font-weight-bold">${item.dbi.toFixed(6)}</td>
+                    <td>
+    <span class="badge ${
+        item.dbi < 0.5 
+            ? 'badge-success text-white' 
+            : 'badge-warning text-dark'
+    }">
+        ${item.dbi < 0.5 ? 'Excellent' : 'Fair'}
+    </span>
+</td>
+                </tr>
+            `).join('');
+
+            // Render Grafik
+            renderChart(dbiList);
+
+        } catch (err) {
+            console.error("Load comparison error:", err);
+            tbody.innerHTML = `<tr><td colspan="3" class="text-danger">Gagal memuat data evaluasi: ${err.message}</td></tr>`;
+        }
+    }
+
+    function renderChart(dbiList) {
+        const ctx = document.getElementById('comparisonChart').getContext('2d');
+        if (myChart) myChart.destroy();
+
+        myChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: dbiList.map(d => 'K=' + d.k),
+                datasets: [{
+                    label: 'Davies-Bouldin Index',
+                    data: dbiList.map(d => d.dbi),    // perhatikan: dbi, bukan dbi_score
+                    borderColor: '#4e73df',
+                    backgroundColor: 'rgba(78, 115, 223, 0.05)',
+                    fill: true,
+                    tension: 0.3,
+                    pointRadius: 5,
+                    pointBackgroundColor: '#4e73df'
+                }]
+            },
+            options: {
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: false,
+                        title: { display: true, text: 'DBI Score (Lower is Better)' }
+                    }
+                },
+                plugins: {
+                    legend: { display: false }
+                }
+            }
+        });
+    }
+
+    // Load data otomatis saat halaman dibuka
+    document.addEventListener('DOMContentLoaded', loadComparisonData);
 </script>
 @endpush

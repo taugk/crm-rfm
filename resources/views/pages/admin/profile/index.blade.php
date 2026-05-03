@@ -1,4 +1,14 @@
-@extends('layouts.admin')
+@php
+    $role = auth()->user()->role;
+    $layout = match($role) {
+        'admin' => 'layouts.admin',
+        'manager' => 'layouts.manager',
+        'kasir' => 'layouts.kasir',
+        default => 'layouts.app',
+    };
+@endphp
+
+@extends($layout)
 
 @section('title', 'Profil Pengguna')
 
@@ -45,47 +55,94 @@
                 </div>
             </div>
 
-            {{-- Bagian Kanan: Form Edit --}}
+            {{-- Bagian Kanan: Form Update Profil --}}
             <div class="col-12 col-lg-8">
-                <div class="card shadow-sm border-0">
+                <div class="card shadow-sm border-0 mb-4">
                     <div class="card-header bg-white border-bottom-0">
-                        <h5 class="card-title">Pengaturan Akun</h5>
+                        <h5 class="card-title">Informasi Profil</h5>
                     </div>
                     <div class="card-body">
-                        <form action="#" method="POST" enctype="multipart/form-data">
+                        <form action="{{ route($role . '.profile.update') }}" method="POST" enctype="multipart/form-data">
                             @csrf
                             @method('PUT')
-                            
+
                             <div class="row">
                                 <div class="col-md-6 mb-3">
                                     <label class="form-label fw-bold small">Nama Lengkap</label>
-                                    <input type="text" name="name" class="form-control" value="{{ $user->name }}">
+                                    <input type="text" name="name" class="form-control @error('name') is-invalid @enderror" value="{{ old('name', $user->name) }}" required>
+                                    @error('name')
+                                        <div class="invalid-feedback">{{ $message }}</div>
+                                    @enderror
                                 </div>
                                 <div class="col-md-6 mb-3">
                                     <label class="form-label fw-bold small">Email</label>
-                                    <input type="email" name="email" class="form-control" value="{{ $user->email }}" readonly>
-                                    <small class="text-muted italic">*Email tidak dapat diubah</small>
+                                    <input type="email" name="email" class="form-control @error('email') is-invalid @enderror" value="{{ old('email', $user->email) }}" required>
+                                    @error('email')
+                                        <div class="invalid-feedback">{{ $message }}</div>
+                                    @enderror
+                                    <small class="text-muted italic">Email dapat diubah, pastikan unik.</small>
                                 </div>
                             </div>
 
-                            <div class="row mt-3">
-                                <div class="col-md-12">
-                                    <h6 class="fw-bold border-bottom pb-2">Ganti Password</h6>
-                                    <p class="text-muted small">Kosongkan jika tidak ingin mengubah password.</p>
+                            <div class="row">
+                                <div class="col-md-12 mb-3">
+                                    <label class="form-label fw-bold small">Nomor Telepon</label>
+                                    <input type="text" name="phone" class="form-control @error('phone') is-invalid @enderror" value="{{ old('phone', $user->phone) }}">
+                                    @error('phone')
+                                        <div class="invalid-feedback">{{ $message }}</div>
+                                    @enderror
+                                </div>
+                            </div>
+
+                            <div class="row">
+                                <div class="col-md-12 mb-3">
+                                    <label class="form-label fw-bold small">Foto Profil</label>
+                                    <input type="file" name="profile_photo" class="form-control @error('profile_photo') is-invalid @enderror" accept="image/*">
+                                    @error('profile_photo')
+                                        <div class="invalid-feedback">{{ $message }}</div>
+                                    @enderror
+                                    <small class="text-muted">Kosongkan jika tidak ingin mengubah foto. Format: jpg, jpeg, png. Maks 2MB.</small>
+                                </div>
+                            </div>
+
+                            <div class="mt-4 d-flex justify-content-end">
+                                <button type="submit" class="btn btn-primary fw-bold px-4">Update Profil</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                {{-- Form Ganti Password --}}
+                <div class="card shadow-sm border-0">
+                    <div class="card-header bg-white border-bottom-0">
+                        <h5 class="card-title">Ganti Password</h5>
+                    </div>
+                    <div class="card-body">
+                        <form action="{{ route($role . '.profile.password') }}" method="POST">
+                            @csrf
+                            @method('PUT')
+                            <div class="row">
+                                <div class="col-md-12 mb-3">
+                                    <label class="form-label fw-bold small">Password Saat Ini</label>
+                                    <input type="password" name="current_password" class="form-control @error('current_password') is-invalid @enderror" required>
+                                    @error('current_password')
+                                        <div class="invalid-feedback">{{ $message }}</div>
+                                    @enderror
                                 </div>
                                 <div class="col-md-6 mb-3">
                                     <label class="form-label fw-bold small">Password Baru</label>
-                                    <input type="password" name="password" class="form-control" placeholder="Minimal 8 karakter">
+                                    <input type="password" name="password" class="form-control @error('password') is-invalid @enderror" required>
+                                    @error('password')
+                                        <div class="invalid-feedback">{{ $message }}</div>
+                                    @enderror
                                 </div>
                                 <div class="col-md-6 mb-3">
-                                    <label class="form-label fw-bold small">Konfirmasi Password</label>
-                                    <input type="password" name="password_confirmation" class="form-control" placeholder="Ulangi password">
+                                    <label class="form-label fw-bold small">Konfirmasi Password Baru</label>
+                                    <input type="password" name="password_confirmation" class="form-control" required>
                                 </div>
                             </div>
-
-                            <div class="mt-4 d-flex justify-content-end gap-2">
-                                <button type="reset" class="btn btn-light-secondary fw-bold">Reset</button>
-                                <button type="submit" class="btn btn-primary fw-bold px-4">Simpan Perubahan</button>
+                            <div class="mt-4 d-flex justify-content-end">
+                                <button type="submit" class="btn btn-primary fw-bold px-4">Update Password</button>
                             </div>
                         </form>
                     </div>

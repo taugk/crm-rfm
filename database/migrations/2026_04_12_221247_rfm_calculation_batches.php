@@ -8,37 +8,24 @@ return new class extends Migration
 {
     public function up(): void
     {
-        // Harus dibuat SEBELUM rfm_scores karena rfm_scores ber-FK ke sini
         Schema::create('rfm_calculation_batches', function (Blueprint $table) {
-            $table->id();
-            $table->foreignId('triggered_by')
-                  ->constrained('users')
-                  ->restrictOnDelete();
-
-            // --- Parameter K-Means yang digunakan ---
-            $table->tinyInteger('k_clusters');                 // Jumlah cluster yg dipilih admin
-            $table->integer('max_iterations')->default(100);
-            $table->integer('actual_iterations');              // Berapa iterasi yg benar-benar terjadi
-            $table->decimal('inertia', 15, 6)->nullable();     // Sum of squared distances (SSE)
-
-            // --- Rentang data yang dihitung ---
-            $table->date('data_from')->nullable();             // Tanggal transaksi awal
-            $table->date('data_to')->nullable();               // Tanggal transaksi akhir
-            $table->integer('total_customers');                // Jumlah customer yang dihitung
-
-            // --- Status eksekusi ---
-            $table->enum('status', ['running', 'completed', 'failed'])->default('running');
-            $table->text('error_message')->nullable();
-            $table->integer('duration_ms')->nullable();        // Lama proses dalam ms
-
-           
-            $table->json('final_centroids')->nullable();
-
-            
-            $table->json('cluster_labels')->nullable();
-
-            $table->timestamps();
-        });
+    $table->id();
+    $table->foreignId('triggered_by')->constrained('users')->restrictOnDelete();
+    $table->tinyInteger('k_clusters'); // Jumlah klaster yang dipilih
+    $table->integer('max_iterations')->default(8); // Maksimal 8 iterasi
+    $table->integer('actual_iterations')->default(0);
+    $table->decimal('inertia', 15, 6)->nullable(); // WCSS Final
+    $table->decimal('dbi_score', 10, 6)->nullable(); // Skor DBI Final
+    $table->date('data_from')->nullable();
+    $table->date('data_to')->nullable();
+    $table->integer('total_customers');
+    $table->enum('status', ['running', 'completed', 'failed'])->default('running');
+    $table->text('error_message')->nullable();
+    $table->integer('duration_ms')->nullable();
+    $table->json('final_centroids')->nullable();
+    $table->json('cluster_labels')->nullable();
+    $table->timestamps();
+});
     }
 
     public function down(): void
