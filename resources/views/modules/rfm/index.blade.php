@@ -41,7 +41,7 @@
                                 </tr>
                             </thead>
                             <tbody id="latest-segment-body">
-                                <tr><td colspan="5" class="text-center text-muted">Belum ada data batch yang tersedia.穷穷</tbody>
+                                <tr><td colspan="5" class="text-center text-muted">Belum ada data batch yang tersedia.</tbody>
                         </table>
                     </div>
                 </div>
@@ -117,7 +117,7 @@
                         </tr>
                     </thead>
                     <tbody id="customer-table-body">
-                        <tr><td colspan="7" class="text-center text-muted">Memuat data pelanggan...穷穷</tbody>
+                        <tr><td colspan="7" class="text-center text-muted">Memuat data pelanggan....</tbody>
                 </table>
             </div>
             <div id="customer-pagination" class="d-flex justify-content-center mt-3"></div>
@@ -161,7 +161,7 @@ function toFixedSafe(value, digits) {
         const paginationDiv = document.getElementById('customer-pagination');
         if (!tbody) return;
         
-        tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">Memuat data pelanggan...穷穷';
+        tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">Memuat data pelanggan....';
         paginationDiv.innerHTML = '';
 
         try {
@@ -172,7 +172,7 @@ function toFixedSafe(value, digits) {
             const data = await res.json();
 
             if (!data.data || data.data.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">Tidak ada data pelanggan穷穷';
+                tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">Tidak ada data pelanggan.';
                 paginationDiv.innerHTML = '';
                 return;
             }
@@ -223,7 +223,7 @@ function toFixedSafe(value, digits) {
 
         } catch (err) {
             console.error('Load customer error:', err);
-            tbody.innerHTML = '<tr><td colspan="7" class="text-center text-danger">Gagal memuat data pelanggan穷穷';
+            tbody.innerHTML = '<tr><td colspan="7" class="text-center text-danger">Gagal memuat data pelanggan.';
         }
     }
 
@@ -284,7 +284,7 @@ function toFixedSafe(value, digits) {
         } catch (error) {
             console.error("Gagal memuat data dashboard:", error);
             const tbody = document.getElementById('batch-history-body');
-            if (tbody) tbody.innerHTML = '<tr><td colspan="8" class="text-center text-danger">Gagal memuat data穷穷';
+            if (tbody) tbody.innerHTML = '<tr><td colspan="8" class="text-center text-danger">Gagal memuat data.';
         }
     }
 
@@ -355,7 +355,7 @@ function toFixedSafe(value, digits) {
         const tbody = document.getElementById('latest-segment-body');
         if (!tbody) return;
         if (!segments || segments.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">Tidak ada data segmen穷穷';
+            tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">Tidak ada data segmen.';
             return;
         }
         tbody.innerHTML = segments.map(s => `
@@ -373,7 +373,7 @@ function toFixedSafe(value, digits) {
         const tbody = document.getElementById('batch-history-body');
         if (!tbody) return;
         if (!batches || batches.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted">Belum ada batch yang terselesaikan.穷穷';
+            tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted">Belum ada batch yang terselesaikan..';
             return;
         }
 
