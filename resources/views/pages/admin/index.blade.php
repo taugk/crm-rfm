@@ -1,4 +1,18 @@
-@extends('layouts.admin')
+@php
+    $layout = match(auth()->user()->role) {
+        'manager' => 'layouts.manager',
+        'admin' => 'layouts.admin',
+        default => 'layouts.admin',
+    };
+    
+    $routePrefix = match(auth()->user()->role) {
+        'manager' => 'manager',
+        'admin' => 'admin',
+        default => 'admin'
+    };
+@endphp
+
+@extends($layout)
 
 @section('title', 'Dashboard Admin')
 

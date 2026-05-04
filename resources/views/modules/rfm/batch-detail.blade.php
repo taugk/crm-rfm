@@ -1,4 +1,12 @@
-@extends('layouts.admin')
+@php
+    $layout = match(auth()->user()->role) {
+        'manager' => 'layouts.manager',
+        'admin' => 'layouts.admin',
+        default => 'layouts.admin',
+    };
+@endphp
+
+@extends($layout)
 
 @section('title', 'Detail Analisis RFM K-Means')
 

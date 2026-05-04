@@ -1,12 +1,25 @@
-@extends('layouts.admin')
+@php
+    $layout = match(auth()->user()->role) {
+        'manager' => 'layouts.manager',
+        'admin' => 'layouts.admin',
+        default => 'layouts.admin',
+    };
+    $routePrefix = match(auth()->user()->role) {
+        'manager' => 'manager',
+        'admin' => 'admin',
+        default => 'admin'
+    };
+@endphp
+
+@extends($layout)
 
 @section('title', 'Detail Promosi')
 
 @section('content')
 <div class="page-heading">
     <div class="d-flex justify-content-between align-items-center">
-        <h3 class="fw-bold">Detail Promosi</h3>
-        <a href="{{ route('admin.promo') }}" class="btn btn-light-secondary btn-sm shadow-sm">
+        <h3 class="fw-bold"><i class="bi bi-info-circle me-2 text-info"></i>Detail Promosi</h3>
+        <a href="{{ route($routePrefix . '.promo') }}" class="btn btn-light-secondary btn-sm shadow-sm">
             <i class="bi bi-arrow-left"></i> Kembali
         </a>
     </div>
@@ -57,7 +70,7 @@
 
                 {{-- Action Buttons --}}
                 <div class="d-grid gap-2">
-                    <a href="{{ route('admin.promo.edit', $promo->id) }}" class="btn btn-warning fw-bold shadow-sm">
+                    <a href="{{ route($routePrefix . '.promo.edit', $promo->id) }}" class="btn btn-warning fw-bold shadow-sm">
                         <i class="bi bi-pencil-square me-1"></i> Edit Promosi
                     </a>
                 </div>

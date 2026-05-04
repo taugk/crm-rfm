@@ -1,4 +1,18 @@
-@extends('layouts.admin')
+@php
+    $layout = match(auth()->user()->role) {
+        'manager' => 'layouts.manager',
+        'admin' => 'layouts.admin',
+        default => 'layouts.admin',
+    };
+    
+    $routePrefix = match(auth()->user()->role) {
+        'manager' => 'manager',
+        'admin' => 'admin',
+        default => 'admin'
+    };
+@endphp
+
+@extends($layout)
 
 @section('title', 'Katalog Hadiah Poin')
 
@@ -11,7 +25,7 @@
                 <p class="text-subtitle text-muted">Kelola daftar produk dan voucher yang dapat ditukar oleh pelanggan.</p>
             </div>
             <div class="col-12 col-md-6 order-md-2 order-first text-end">
-                <a href="{{ route('admin.loyalty.rewards.create') }}" class="btn btn-primary shadow-sm">
+                <a href="{{ route($routePrefix . '.loyalty.rewards.create') }}" class="btn btn-primary shadow-sm">
                     <i class="bi bi-plus-circle me-1"></i> Tambah Hadiah Baru
                 </a>
             </div>
@@ -129,11 +143,17 @@
                                 </td>
                                 <td class="text-center">
                                     <div class="btn-group gap-1">
-                                        <a href="{{ route('admin.loyalty.rewards.edit', $reward->id) }}" class="btn btn-sm btn-outline-warning rounded-pill px-3">Edit</a>
-                                        <form action="{{ route('admin.loyalty.rewards.destroy', $reward->id) }}" method="POST" class="d-inline">
-                                            @csrf @method('DELETE')
-                                            <button type="submit" class="btn btn-sm btn-outline-danger rounded-pill px-3" onclick="return confirm('Hapus hadiah ini?')">Hapus</button>
-                                        </form>
+                                        <a href="{{ route($routePrefix . '.loyalty.rewards.show', $reward->id) }}" class="btn btn-sm btn-outline-info rounded-pill px-3">
+                                            <i class="bi bi-eye"></i> Detail
+                                        </a>
+                                        <a href="{{ route($routePrefix . '.loyalty.rewards.edit', $reward->id) }}" class="btn btn-sm btn-outline-warning rounded-pill px-3">
+                                            <i class="bi bi-pencil"></i> Edit
+                                        </a>
+                                        <button type="button" class="btn btn-sm btn-outline-danger rounded-pill px-3 btn-delete" 
+                                                data-id="{{ $reward->id }}" 
+                                                data-name="{{ $reward->name }}">
+                                            <i class="bi bi-trash"></i> Hapus
+                                        </button>
                                     </div>
                                 </td>
                             </tr>
@@ -152,4 +172,73 @@
         </div>
     </section>
 </div>
+
+{{-- MODAL KONFIRMASI HAPUS --}}
+<div class="modal fade" id="deleteModal">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title">Konfirmasi Hapus</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Apakah Anda yakin ingin menghapus hadiah <strong id="deleteRewardName"></strong>?</p>
+                <p class="text-danger small">Tindakan ini tidak dapat dibatalkan.</p>
+            </div>
+            <div class="modal-footer">
+                <form id="deleteForm" method="POST">
+                    @csrf
+                    @method('DELETE')
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
+                    <button type="submit" class="btn btn-danger">Ya, Hapus</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
 @endsection
+
+@push('scripts')
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Konfirmasi Hapus dengan Modal
+    document.querySelectorAll('.btn-delete').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const id = this.dataset.id;
+            const name = this.dataset.name;
+            const routePrefix = '{{ $routePrefix }}';
+            
+            const modal = new bootstrap.Modal(document.getElementById('deleteModal'));
+            const deleteForm = document.getElementById('deleteForm');
+            
+            document.getElementById('deleteRewardName').innerText = name;
+            deleteForm.action = `/${routePrefix}/loyalty/rewards/${id}`;
+            
+            modal.show();
+        });
+    });
+
+    // Notifikasi
+    @if(session('success'))
+    Swal.fire({
+        icon: 'success',
+        title: 'Berhasil',
+        text: "{{ session('success') }}",
+        timer: 2000,
+        showConfirmButton: false
+    });
+    @endif
+
+    @if(session('error'))
+    Swal.fire({
+        icon: 'error',
+        title: 'Gagal',
+        text: "{{ session('error') }}",
+        timer: 3000,
+        showConfirmButton: true
+    });
+    @endif
+});
+</script>
+@endpush

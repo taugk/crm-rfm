@@ -1,4 +1,17 @@
-@extends('layouts.admin')
+@php
+    $layout = match(auth()->user()->role) {
+        'manager' => 'layouts.manager',
+        'admin' => 'layouts.admin',
+        default => 'layouts.admin',
+    };
+    $routePrefix = match(auth()->user()->role) {
+        'manager' => 'manager',
+        'admin' => 'admin',
+        default => 'admin'
+    };
+@endphp
+
+@extends($layout)
 
 @section('title', 'Tambah Promosi')
 
@@ -13,7 +26,7 @@
             <div class="col-12 col-md-6 order-md-2 order-first">
                 <nav aria-label="breadcrumb" class="breadcrumb-header float-start float-lg-end">
                     <ol class="breadcrumb">
-                        <li class="breadcrumb-item"><a href="{{ route('admin.promo') }}">Promosi</a></li>
+                        <li class="breadcrumb-item"><a href="{{ route($routePrefix . '.promo') }}">Promosi</a></li>
                         <li class="breadcrumb-item active" aria-current="page">Tambah Baru</li>
                     </ol>
                 </nav>
@@ -24,7 +37,7 @@
 
 <div class="page-content">
     <section class="section">
-        <form action="{{ route('admin.promo.store') }}" method="POST">
+        <form action="{{ route($routePrefix . '.promo.store') }}" method="POST">
             @csrf
             <div class="row">
                 {{-- KOLOM KIRI: Konten Utama --}}
@@ -76,7 +89,7 @@
                                 </div>
                             </div>
 
-                          <div class="form-group mb-0">
+                            <div class="form-group mb-0">
                                 <label for="target_segment" class="form-label fw-bold small">TARGET SEGMEN PELANGGAN</label>
                                 <div class="input-group">
                                     <span class="input-group-text bg-light"><i class="bi bi-people"></i></span>
@@ -93,7 +106,7 @@
                                     <small class="text-danger">{{ $message }}</small>
                                 @enderror
                             </div>
-                                                    </div>
+                        </div>
                     </div>
                 </div>
 
@@ -148,7 +161,7 @@
                                 <button type="submit" class="btn btn-primary fw-bold shadow">
                                     <i class="bi bi-save2-fill me-2"></i>SIMPAN PROMO
                                 </button>
-                                <a href="{{ route('admin.promo') }}" class="btn btn-light-secondary btn-sm">KEMBALI</a>
+                                <a href="{{ route($routePrefix . '.promo') }}" class="btn btn-light-secondary btn-sm">KEMBALI</a>
                             </div>
                         </div>
                     </div>

@@ -7,9 +7,19 @@ use App\Models\Promotions;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Auth;
 
 class PromotionsController extends Controller
 {
+    /**
+     * Helper function untuk mendapatkan prefix route berdasarkan role user saat ini.
+     * Mengembalikan 'manager' jika role adalah manager, selain itu mengembalikan 'admin'.
+     */
+    private function getRoutePrefix()
+    {
+        return Auth::user()->role === 'manager' ? 'manager' : 'admin';
+    }
+
     /**
      * Menampilkan daftar semua promosi.
      * Menggunakan latest() agar promo terbaru muncul di atas.
@@ -17,6 +27,7 @@ class PromotionsController extends Controller
     public function index()
     {
         $promos = Promotions::latest()->get();
+        // File view tetap mengambil dari folder admin agar tidak duplikasi
         return view('pages.admin.promo.index', compact('promos'));
     }
 
@@ -66,7 +77,8 @@ class PromotionsController extends Controller
 
             Promotions::create($data);
 
-            return redirect()->route('admin.promo')
+            // Redirect dinamis berdasarkan role (admin.promo atau manager.promo)
+            return redirect()->route($this->getRoutePrefix() . '.promo')
                 ->with('success', 'Promosi berhasil diterbitkan!');
 
         } catch (\Exception $e) {
@@ -133,7 +145,8 @@ class PromotionsController extends Controller
 
             Log::info('Promotions Update: Berhasil update', ['id' => $id]);
 
-            return redirect()->route('admin.promo')
+            // Redirect dinamis berdasarkan role
+            return redirect()->route($this->getRoutePrefix() . '.promo')
                 ->with('success', 'Promosi berhasil diperbarui!');
 
         } catch (\Exception $e) {
@@ -155,7 +168,8 @@ class PromotionsController extends Controller
 
             Log::info('Promotions Destroy: Berhasil hapus', ['id' => $id]);
 
-            return redirect()->route('admin.promo')
+            // Redirect dinamis berdasarkan role
+            return redirect()->route($this->getRoutePrefix() . '.promo')
                 ->with('success', 'Promosi telah dihapus.');
         } catch (\Exception $e) {
             Log::error('Promotions Destroy: Gagal hapus', ['id' => $id, 'error' => $e->getMessage()]);
