@@ -18,6 +18,7 @@ use App\Http\Controllers\Customers\CustomersController;
 use App\Http\Controllers\Kasir\KasirController;
 use App\Http\Controllers\Kasir\CustomerController as KasirCustomerController;
 use App\Http\Controllers\Kasir\TransactionController as KasirTransactionController;
+use App\Http\Controllers\Kasir\PointRewardController as KasirPointRewardController;
 use App\Http\Controllers\RFM\RfmController;
 use App\Models\RfmCalculationBatch;
 use Illuminate\Support\Facades\Route;
@@ -49,15 +50,31 @@ Route::middleware(['auth:customers'])->prefix('/customer')->group(function () {
     Route::get('/menu', [CustomersController::class, 'menu'])->name('customers.menu');
     Route::get('/transactions', [CustomersController::class, 'transactions'])->name('customers.transactions');
     Route::get('/transactions/detail/{id}', [CustomersController::class, 'transactionShow'])->name('customers.show.transactions');
+    
+    // ==================== PENUKARAN POIN ====================
     Route::get('/redeem-point', [CustomersController::class, 'rewards'])->name('customers.points.redeem');
     Route::post('/redeem-point', [CustomersController::class, 'redeem'])->name('customers.points.redeem.process');
+    
+    // ==================== RIWAYAT PENUKARAN POIN ====================
+    Route::get('/points/history', [CustomersController::class, 'pointsHistory'])->name('customers.points.history');
+    Route::get('/points/detail/{id}', [CustomersController::class, 'pointsDetail'])->name('customers.points.detail');
+    Route::get('/points/print-voucher/{id}', [CustomersController::class, 'printVoucher'])->name('customers.points.print-voucher');
+    
+    // ==================== KERANJANG & CHECKOUT ====================
+    Route::post('/cart/add', [CustomersController::class, 'addToCart'])->name('customers.cart.add');
+    Route::post('/cart/update', [CustomersController::class, 'updateCart'])->name('customers.cart.update');
+    Route::post('/cart/remove', [CustomersController::class, 'removeFromCart'])->name('customers.cart.remove');
+    Route::post('/checkout', [CustomersController::class, 'checkout'])->name('customers.checkout');
+    
+    // ==================== PROMO ====================
     Route::get('/promo', [CustomersController::class, 'promotions'])->name('customers.promos');
 
-    // --- BAGIAN PROFIL (PERBAIKAN) ---
+    // ==================== PROFIL ====================
     Route::get('/profile', [CustomersController::class, 'profile'])->name('customers.profile');
     Route::post('/profile/update', [CustomersController::class, 'updateProfile'])->name('customers.profile.update');
     Route::put('/profile/password', [CustomersController::class, 'updatePassword'])->name('customers.password.update');
 
+    // ==================== LOGOUT ====================
     Route::post('/logout', [LoginController::class, 'logout'])->name('customers.logout');
 });
 
@@ -374,8 +391,67 @@ Route::middleware(['auth:web', 'role:kasir'])->prefix('kasir')->name('kasir.')->
         Route::get('/{id}/edit', [KasirCustomerController::class, 'edit'])->name('edit');
         Route::put('/{id}', [KasirCustomerController::class, 'update'])->name('update');
     });
+
+    // ==================== PENUKARAN POIN (KASIR) ====================
+    Route::prefix('point-rewards')->name('point-rewards.')->group(function () {
+        
+        // ========== HALAMAN UTAMA ==========
+        // Halaman utama penukaran poin
+        Route::get('/', [KasirPointRewardController::class, 'index'])->name('index');
+        
+        // ========== SUB MENU: DAFTAR HADIAH ==========
+        // Menampilkan semua reward yang tersedia
+        Route::get('/rewards', [KasirPointRewardController::class, 'rewards'])->name('rewards');
+        
+        // ========== SUB MENU: RIWAYAT PENUKARAN ==========
+        // Riwayat semua penukaran poin
+        Route::get('/redeem-history', [KasirPointRewardController::class, 'redeemHistory'])->name('redeem-history');
+        
+        // Riwayat penukaran customer tertentu
+        Route::get('/customer-redemptions', [KasirPointRewardController::class, 'customerRedemptions'])->name('customer-redemptions');
+        
+        // ========== SUB MENU: PENDING REQUEST (KONFIRMASI) ==========
+        // Menampilkan semua request pending dari member
+        Route::get('/pending', [KasirPointRewardController::class, 'pendingRequests'])->name('pending');
+        
+        // ========== BULK ACTIONS (KONFIRMASI MASSAL) ==========
+        // Konfirmasi multiple redemption pending sekaligus
+        Route::post('/redemptions/bulk-confirm', [KasirPointRewardController::class, 'bulkConfirmRedemptions'])->name('bulk-confirm');
+        
+        // Batalkan multiple redemption pending sekaligus
+        Route::post('/redemptions/bulk-cancel', [KasirPointRewardController::class, 'bulkCancelRedemptions'])->name('bulk-cancel');
+        
+        // ========== API / AJAX ENDPOINTS ==========
+        // Get rewards via AJAX
+        Route::get('/get-rewards', [KasirPointRewardController::class, 'getRewards'])->name('get-rewards');
+        
+        // Search customer untuk penukaran poin
+        Route::get('/search-customer', [KasirPointRewardController::class, 'searchCustomer'])->name('search-customer');
+        
+        // ========== PROSES PENUKARAN ==========
+        // Proses penukaran poin LANGSUNG (status langsung completed)
+        Route::post('/redeem', [KasirPointRewardController::class, 'redeem'])->name('redeem');
+        
+        // ========== KONFIRMASI REQUEST DARI MEMBER (SINGLE) ==========
+        // Konfirmasi redemption pending (request dari member)
+        Route::post('/redemption/{id}/confirm', [KasirPointRewardController::class, 'confirmRedemption'])->name('confirm-redemption');
+        
+        // Batalkan redemption pending
+        Route::post('/redemption/{id}/cancel', [KasirPointRewardController::class, 'cancelRedemption'])->name('cancel-redemption');
+        
+        // ========== DETAIL & PRINT ==========
+        // Detail redemption
+        Route::get('/redemption/{id}', [KasirPointRewardController::class, 'showRedemption'])->name('show-redemption');
+        
+        // Print voucher (untuk reward type voucher)
+        Route::get('/voucher/{id}/print', [KasirPointRewardController::class, 'printVoucher'])->name('print-voucher');
+        
+        // ========== STATISTIK ==========
+        // Get stats untuk dashboard
+        Route::get('/stats', [KasirPointRewardController::class, 'getStats'])->name('stats');
+    });
     
-    // Redeem Points
+    // ==================== REDEEM POINTS (ALTERNATIVE / SIMPLER) ====================
     Route::prefix('redeem')->name('redeem.')->group(function () {
         Route::get('/', [RedeemController::class, 'index'])->name('index');
         Route::post('/points', [RedeemController::class, 'redeemPoints'])->name('points');

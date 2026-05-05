@@ -851,7 +851,9 @@
                                 <div class="tc-phone">{{ $customer->phone ?? '-' }}</div>
                             </div>
                         </div>
-                        <span class="badge badge-amber">⭐ {{ number_format($customer->total_points) }}</span>
+                        <span class="badge badge-amber">
+                            ⭐ {{ number_format($customer->total_points ?? $customer->loyalty_points ?? 0) }}
+                        </span>
                     </div>
                     @endforeach
                 @else

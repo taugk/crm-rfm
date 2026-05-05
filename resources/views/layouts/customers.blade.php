@@ -129,6 +129,9 @@
                     <li class="nav-item">
                         <a class="nav-link {{ Request::routeIs('customers.points.redeem') ? 'active' : '' }}" href="{{ route('customers.points.redeem') }}">Tukar Reward</a>
                     </li>
+                    <li class="nav-item">
+                        <a class="nav-link {{ Request::routeIs('customers.points.history') ? 'active' : '' }}" href="{{ route('customers.points.history') }}">Riwayat Poin</a>
+                    </li>
                 </ul>
 
                 <div class="dropdown">

@@ -144,6 +144,10 @@ private function adminDashboard()
     $topCategories = $this->getTopCategories();
     $monthlyRevenue = $this->getMonthlyRevenue();
     $customerGrowth = $this->getCustomerGrowth();
+
+    
+
+    
     
     return view('pages.admin.index', compact(
         'totalUsers',

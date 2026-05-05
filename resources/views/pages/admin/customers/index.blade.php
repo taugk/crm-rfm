@@ -51,22 +51,16 @@
             <div class="card-header d-flex justify-content-between align-items-center bg-white border-bottom-0 py-3">
                 <h5 class="mb-0">Daftar Pelanggan</h5>
                 <div class="d-flex gap-2">
-                    {{-- Tombol Export --}}
                     <a href="{{ route('admin.customers.export') }}" id="btnExport" class="btn btn-success btn-sm">
                         <i class="bi bi-file-earmark-spreadsheet me-1"></i> Export
                     </a>
-
-                    {{-- Tombol Import (Trigger Hidden Input) --}}
                     <button type="button" class="btn btn-outline-success btn-sm" onclick="document.getElementById('importExcelInput').click()">
                         <i class="bi bi-upload me-1"></i> Import
                     </button>
-                    
-                    {{-- Form Import Tersembunyi --}}
                     <form action="{{ route('admin.customers.import') }}" method="POST" enctype="multipart/form-data" id="finalImportForm" class="d-none">
                         @csrf
                         <input type="file" name="file" id="importExcelInput" accept=".xlsx, .xls">
                     </form>
-
                     <a href="{{ route('admin.customers.create') }}" class="btn btn-primary btn-sm shadow-sm">
                         <i class="bi bi-person-plus-fill me-1"></i> Tambah
                     </a>
@@ -102,18 +96,18 @@
                                             <small class="text-muted">#PLG-{{ str_pad($p->id, 5, '0', STR_PAD_LEFT) }}</small>
                                         </div>
                                     </div>
-                                </td>
+                                 </td>
                                 <td>
                                     <div class="small">
                                         <div class="pelanggan-email mb-1 text-truncate" style="max-width: 150px;"><i class="bi bi-envelope me-1"></i> {{ $p->email ?? '-' }}</div>
                                         <div class="pelanggan-phone text-muted"><i class="bi bi-telephone me-1"></i> {{ $p->phone }}</div>
                                     </div>
-                                </td>
+                                 </td>
                                 <td>
                                     <p class="small text-truncate mb-0" style="max-width: 150px;" title="{{ $p->full_address }}">
                                         {{ $p->full_address ?? '-' }}
                                     </p>
-                                </td>
+                                 </td>
                                 <td class="text-center">
                                     <span class="badge bg-light-primary text-primary fw-bold">{{ number_format($p->total_points) }}</span>
                                 </td>
@@ -134,14 +128,16 @@
                                 </td>
                             </tr>
                             @empty
-                            <tr><td colspan="7" class="text-center py-5 text-muted">Data pelanggan tidak ditemukan.</td></tr>
+                            <tr>
+                                <td colspan="7" class="text-center py-5 text-muted">Data pelanggan tidak ditemukan.</td>
+                            </tr>
                             @endforelse
                         </tbody>
                     </table>
                 </div>
                 <div class="d-flex justify-content-between align-items-center mt-4">
-                    <p class="text-muted small">Menampilkan {{ $data->firstItem() ?? 0 }} - {{ $data->lastItem() ?? 0 }} dari {{ $data->total() }} pelanggan</p>
-                    <nav>{{ $data->links('pagination::bootstrap-5') }}</nav>
+                    <p class="text-muted small" id="paginationInfo">Menampilkan {{ $data->firstItem() ?? 0 }} - {{ $data->lastItem() ?? 0 }} dari {{ $data->total() }} pelanggan</p>
+                    <nav id="paginationLinks">{{ $data->appends(request()->query())->links('pagination::bootstrap-5') }}</nav>
                 </div>
             </div>
         </div>
@@ -168,7 +164,7 @@
                 </div>
             </div>
             <div class="modal-footer bg-light">
-                <a  href="{{ route('admin.customers') }}" class="btn btn-secondary">Batal</a>
+                <a href="{{ route('admin.customers') }}" class="btn btn-secondary">Batal</a>
                 <button type="button" class="btn btn-success px-4" onclick="document.getElementById('finalImportForm').submit()">
                     <i class="bi bi-cloud-arrow-up me-1"></i> Upload Sekarang
                 </button>
@@ -179,58 +175,140 @@
 @endsection
 
 @push('scripts')
-{{-- Library SheetJS untuk baca Excel di Browser --}}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', () => {
     const searchInput = document.getElementById('jsSearchInput');
     const statusFilter = document.getElementById('jsStatusFilter');
     const resetBtn = document.getElementById('jsResetBtn');
-    const tableRows = document.querySelectorAll('.pelanggan-row');
     const importInput = document.getElementById('importExcelInput');
     const previewModal = new bootstrap.Modal(document.getElementById('previewModal'));
+    
+    let debounceTimer;
 
-    /** 1. FILTERING LOGIC **/
-    const filterTable = () => {
-    const searchTerm = searchInput.value.toLowerCase();
-    const selectedStatus = statusFilter.value.toLowerCase();
+    // Fungsi untuk render tabel dari data HTML
+    function renderTable(html, paginationInfo, paginationLinks) {
+        document.getElementById('pelangganTableBody').innerHTML = html;
+        document.getElementById('paginationInfo').innerHTML = paginationInfo;
+        document.getElementById('paginationLinks').innerHTML = paginationLinks;
+    }
 
-    // 1. Logika Filter Baris Tabel (Client-side)
-    tableRows.forEach(row => {
-        const name = row.querySelector('.pelanggan-name').textContent.toLowerCase();
-        const email = row.querySelector('.pelanggan-email').textContent.toLowerCase();
-        const phone = row.querySelector('.pelanggan-phone').textContent.toLowerCase();
-        const status = row.querySelector('.pelanggan-status').textContent.toLowerCase().trim();
-
-        const matchesSearch = name.includes(searchTerm) || email.includes(searchTerm) || phone.includes(searchTerm);
-        const matchesStatus = selectedStatus === "" || status === selectedStatus;
-        row.style.display = (matchesSearch && matchesStatus) ? "" : "none";
-    });
-
-    // 2. Logika Update URL Export secara Dinamis
-    const exportBtn = document.getElementById('btnExport');
-    if (exportBtn) {
+    // Fungsi untuk fetch data dengan filter
+    function fetchFilteredData(page = null) {
+        const searchTerm = searchInput.value;
+        const status = statusFilter.value;
         
+        // Tampilkan loading
+        const tableBody = document.getElementById('pelangganTableBody');
+        tableBody.innerHTML = `
+            <tr>
+                <td colspan="7" class="text-center py-5">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <p class="mt-2 text-muted">Memuat data...</p>
+                </td>
+            </tr>
+        `;
+        
+        // Build URL
+        let url = "{{ route('admin.customers') }}?ajax=1";
+        if (searchTerm) url += `&search=${encodeURIComponent(searchTerm)}`;
+        if (status) url += `&status=${encodeURIComponent(status)}`;
+        if (page) url += `&page=${page}`;
+        
+        // Fetch data
+        fetch(url, {
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                renderTable(data.html, data.pagination_info, data.pagination_links);
+                
+                // Update URL tanpa reload
+                const newUrl = new URL(window.location.href);
+                if (searchTerm) newUrl.searchParams.set('search', searchTerm);
+                else newUrl.searchParams.delete('search');
+                if (status) newUrl.searchParams.set('status', status);
+                else newUrl.searchParams.delete('status');
+                if (page) newUrl.searchParams.set('page', page);
+                window.history.pushState({}, '', newUrl);
+                
+                // Update export URL
+                updateExportUrl(searchTerm, status);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            tableBody.innerHTML = `
+                <tr>
+                    <td colspan="7" class="text-center py-5 text-danger">
+                        <i class="bi bi-exclamation-triangle fs-1"></i>
+                        <p class="mt-2">Gagal memuat data. Silakan refresh halaman.</p>
+                    </td>
+                </tr>
+            `;
+        });
+    }
+    
+    // Update URL export
+    function updateExportUrl(search, status) {
+        const exportBtn = document.getElementById('btnExport');
         const baseUrl = "{{ route('admin.customers.export') }}";
-        
-
         const params = new URLSearchParams();
-        if (searchInput.value) params.append('search', searchInput.value);
-        if (statusFilter.value) params.append('status', statusFilter.value);
-
-
+        if (search) params.append('search', search);
+        if (status) params.append('status', status);
         const queryString = params.toString();
         exportBtn.href = queryString ? `${baseUrl}?${queryString}` : baseUrl;
     }
-};
-
-    searchInput?.addEventListener('input', filterTable);
-    statusFilter?.addEventListener('change', filterTable);
-    resetBtn?.addEventListener('click', () => {
-        searchInput.value = ""; statusFilter.value = ""; filterTable();
+    
+    // Event listener dengan debounce untuk input search
+    const handleFilterChange = () => {
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(() => {
+            fetchFilteredData();
+        }, 500);
+    };
+    
+    searchInput?.addEventListener('input', handleFilterChange);
+    statusFilter?.addEventListener('change', () => {
+        fetchFilteredData();
     });
-
-    /** 2. IMPORT PREVIEW LOGIC **/
+    
+    // Reset filter
+    resetBtn?.addEventListener('click', () => {
+        searchInput.value = "";
+        statusFilter.value = "";
+        fetchFilteredData();
+    });
+    
+    // Handle pagination click (event delegation)
+    document.addEventListener('click', (e) => {
+        const paginationLink = e.target.closest('.pagination a');
+        if (paginationLink && paginationLink.getAttribute('href')) {
+            e.preventDefault();
+            const url = new URL(paginationLink.href);
+            const page = url.searchParams.get('page');
+            fetchFilteredData(page);
+        }
+    });
+    
+    // Handle browser back/forward
+    window.addEventListener('popstate', () => {
+        const urlParams = new URL(window.location.href);
+        const search = urlParams.searchParams.get('search') || '';
+        const status = urlParams.searchParams.get('status') || '';
+        const page = urlParams.searchParams.get('page') || null;
+        
+        searchInput.value = search;
+        statusFilter.value = status;
+        fetchFilteredData(page);
+    });
+    
+    /** IMPORT PREVIEW LOGIC **/
     window.resetImport = function() {
         importInput.value = ""; 
         document.getElementById('previewHead').innerHTML = "";
@@ -241,7 +319,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const file = e.target.files[0];
         if (!file) return;
 
-        // Validasi Ekstensi
         const ext = file.name.split('.').pop().toLowerCase();
         if(!['xlsx', 'xls'].includes(ext)) {
             Swal.fire('Error', 'Format file harus Excel (.xlsx atau .xls)', 'error');
@@ -257,13 +334,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 const sheetData = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], {header: 1});
                 
                 if (sheetData.length > 0) {
-                    // Build Header
                     let headHtml = "<tr>"; 
                     sheetData[0].forEach(h => headHtml += `<th class="py-2 px-3 small text-uppercase">${h || '-'}</th>`); 
                     headHtml += "</tr>";
                     document.getElementById('previewHead').innerHTML = headHtml;
 
-                    // Build Body (Preview 10 baris)
                     let bodyHtml = "";
                     const rows = sheetData.slice(1, 11); 
                     rows.forEach(row => {

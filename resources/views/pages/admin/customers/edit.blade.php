@@ -53,7 +53,6 @@
                                 <label class="fw-bold mb-1 small">Tanggal Lahir</label>
                                 <div class="input-group">
                                     <span class="input-group-text bg-light"><i class="bi bi-calendar-event"></i></span>
-                                    {{-- Data tanggal lahir diformat ke Y-m-d agar terbaca oleh flatpickr --}}
                                     <input type="text" name="birthdate" id="birthdate" class="form-control flatpickr" value="{{ old('birthdate', $customer->date_of_birth ? $customer->date_of_birth->format('Y-m-d') : '') }}" placeholder="Pilih tanggal lahir">
                                 </div>
                                 @error('birthdate') <div class="invalid-feedback text-danger small">{{ $message }}</div> @enderror
@@ -65,6 +64,38 @@
                                     <option value="inactive" {{ old('status', $customer->status) == 'inactive' ? 'selected' : '' }}>Non-Aktif</option>
                                     <option value="block" {{ old('status', $customer->status) == 'block' ? 'selected' : '' }}>Blokir</option>
                                 </select>
+                            </div>
+
+                            {{-- SECTION PASSWORD - TAMBAHAN BARU --}}
+                            <div class="col-12 mt-4">
+                                <h5 class="mb-3 text-primary"><i class="bi bi-lock me-2"></i>Perbarui Password</h5>
+                                <div class="alert alert-info small py-2 mb-3">
+                                    <i class="bi bi-info-circle me-1"></i> 
+                                    Kosongkan kedua field jika tidak ingin mengubah password.
+                                </div>
+                                <div class="row g-3">
+                                    <div class="col-md-6">
+                                        <label class="fw-bold mb-1 small">Password Baru</label>
+                                        <div class="input-group">
+                                            <input type="password" name="password" id="password" class="form-control @error('password') is-invalid @enderror" placeholder="Masukkan password baru">
+                                            <button class="btn btn-outline-secondary toggle-password" type="button" data-target="password">
+                                                <i class="bi bi-eye"></i>
+                                            </button>
+                                        </div>
+                                        <small class="text-muted">Minimal 6 karakter</small>
+                                        @error('password') <div class="invalid-feedback d-block">{{ $message }}</div> @enderror
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="fw-bold mb-1 small">Konfirmasi Password Baru</label>
+                                        <div class="input-group">
+                                            <input type="password" name="password_confirmation" id="password_confirmation" class="form-control" placeholder="Konfirmasi password baru">
+                                            <button class="btn btn-outline-secondary toggle-password" type="button" data-target="password_confirmation">
+                                                <i class="bi bi-eye"></i>
+                                            </button>
+                                        </div>
+                                        <small class="text-muted">Masukkan ulang password yang sama</small>
+                                    </div>
+                                </div>
                             </div>
 
                             <div class="col-12 mt-4">
@@ -82,7 +113,6 @@
                 <div class="card shadow-sm border-0 text-center p-4">
                     <label class="fw-bold mb-3 small">Foto Profil</label>
                     <div class="mb-3">
-                        {{-- Menampilkan foto lama jika ada, jika tidak tampilkan default --}}
                         <img src="{{ $customer->profile_photo ? asset($customer->profile_photo) : 'https://www.w3schools.com/howto/img_avatar.png' }}" 
                              id="preview" class="rounded-circle img-thumbnail shadow-sm" style="width: 150px; height: 150px; object-fit: cover;">
                     </div>
@@ -95,11 +125,21 @@
                     <a href="{{ route('admin.customers') }}" class="btn btn-light-secondary w-100 mt-2">Batal</a>
                 </div>
                 
-                {{-- Info Poin (Tambahan agar admin ingat saldo saat ini) --}}
+                {{-- Info Poin --}}
                 <div class="card mt-3 border-0 shadow-sm bg-light">
                     <div class="card-body">
                         <small class="text-muted d-block">Saldo Poin Saat Ini</small>
                         <h4 class="fw-bold text-primary mb-0">{{ number_format($customer->total_points) }} Pts</h4>
+                    </div>
+                </div>
+
+                {{-- Info Terakhir Update --}}
+                <div class="card mt-3 border-0 shadow-sm bg-light">
+                    <div class="card-body">
+                        <small class="text-muted d-block">Terakhir Diupdate</small>
+                        <h6 class="fw-bold mb-0">{{ $customer->updated_at ? $customer->updated_at->format('d M Y H:i') : '-' }}</h6>
+                        <small class="text-muted d-block mt-2">Terdaftar Sejak</small>
+                        <h6 class="fw-bold mb-0">{{ $customer->created_at ? $customer->created_at->format('d M Y') : '-' }}</h6>
                     </div>
                 </div>
             </div>
@@ -132,6 +172,74 @@
                 reader.readAsDataURL(file);
             }
         });
+
+        // Toggle Password Visibility
+        const toggleButtons = document.querySelectorAll('.toggle-password');
+        toggleButtons.forEach(button => {
+            button.addEventListener('click', function() {
+                const targetId = this.getAttribute('data-target');
+                const input = document.getElementById(targetId);
+                const icon = this.querySelector('i');
+                
+                if (input.type === 'password') {
+                    input.type = 'text';
+                    icon.classList.remove('bi-eye');
+                    icon.classList.add('bi-eye-slash');
+                } else {
+                    input.type = 'password';
+                    icon.classList.remove('bi-eye-slash');
+                    icon.classList.add('bi-eye');
+                }
+            });
+        });
+
+        // Validasi password confirmation di client-side (opsional)
+        const password = document.getElementById('password');
+        const passwordConfirmation = document.getElementById('password_confirmation');
+        
+        function validatePasswordMatch() {
+            if (password.value !== '' && passwordConfirmation.value !== '' && password.value !== passwordConfirmation.value) {
+                passwordConfirmation.setCustomValidity('Password tidak cocok!');
+                passwordConfirmation.classList.add('is-invalid');
+            } else {
+                passwordConfirmation.setCustomValidity('');
+                passwordConfirmation.classList.remove('is-invalid');
+            }
+        }
+        
+        password?.addEventListener('change', validatePasswordMatch);
+        passwordConfirmation?.addEventListener('keyup', validatePasswordMatch);
+        
+        // SweetAlert konfirmasi sebelum submit
+        const form = document.getElementById('customerForm');
+        form?.addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            Swal.fire({
+                title: 'Simpan Perubahan?',
+                text: "Pastikan data yang diisi sudah benar!",
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonColor: '#F97316',
+                cancelButtonColor: '#6c757d',
+                confirmButtonText: 'Ya, Simpan!',
+                cancelButtonText: 'Batal'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    form.submit();
+                }
+            });
+        });
     });
 </script>
+
+<style>
+    .toggle-password {
+        border-top-left-radius: 0;
+        border-bottom-left-radius: 0;
+    }
+    .toggle-password:hover {
+        background-color: #f8f9fa;
+    }
+</style>
 @endpush

@@ -69,7 +69,7 @@
                                     </div>
                                 </div>
                                 <div class="col-md-8 col-lg-12 col-xl-7">
-                                    <h6 class="text-muted font-semibold">Produk</h6>
+                                    <h6 class="text-muted font-semibold">Produk Terjual</h6>
                                     <h6 class="font-extrabold mb-0">{{ $produkTerjual ?? 0 }}</h6>
                                 </div>
                             </div>
@@ -160,7 +160,7 @@
                                 </div>
                                 <div class="flex-grow-1">
                                     <h6 class="mb-0">{{ $produk->name }}</h6>
-                                    <p class="text-muted mb-0 text-sm">BrewCRM Category</p>
+                                    <p class="text-muted mb-0 text-sm">Terjual: {{ $produk->total }} item</p>
                                 </div>
                                 <div>
                                     <span class="badge bg-light-primary text-primary">{{ $produk->total }} Terjual</span>
@@ -204,10 +204,10 @@
                                                 </div>
                                             </td>
                                             <td class="col-auto">
-                                                <p class=" mb-0 text-sm">{{ \Carbon\Carbon::parse($trx->transaction_date)->format('d M Y, H:i') }}</p>
+                                                <p class="mb-0 text-sm">{{ \Carbon\Carbon::parse($trx->transaction_date)->format('d M Y, H:i') }}</p>
                                             </td>
                                             <td class="col-auto">
-                                                <p class=" mb-0">{{ $trx->customer->name ?? 'Guest' }}</p>
+                                                <p class="mb-0">{{ $trx->customer->name ?? 'Guest' }}</p>
                                             </td>
                                             <td class="col-auto text-end">
                                                 <p class="font-bold mb-0 text-primary">Rp{{ number_format($trx->total_price ?? 0, 0, ',', '.') }}</p>
@@ -215,7 +215,7 @@
                                         </tr>
                                         @empty
                                         <tr>
-                                            <td colspan="4" class="text-center py-5">Belum ada transaksi hari ini.</td>
+                                            <td colspan="4" class="text-center py-5">Belum ada transaksi.</td>
                                         </tr>
                                         @endforelse
                                     </tbody>
@@ -230,40 +230,95 @@
 </div>
 @endsection
 
-@section('scripts')
+@push('scripts')
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
     document.addEventListener('DOMContentLoaded', function() {
-        const ctx = document.getElementById('chart-transaksi');
-        if (ctx) {
-            new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels: {!! json_encode($labels ?? []) !!},
-                    datasets: [{
-                        label: 'Jumlah Transaksi',
-                        data: {!! json_encode($dataTransaksi ?? []) !!},
-                        borderColor: '#E8531A',
-                        backgroundColor: 'rgba(232, 83, 26, 0.1)',
-                        borderWidth: 3,
-                        fill: true,
-                        tension: 0.4,
-                        pointRadius: 5,
-                        pointBackgroundColor: '#E8531A'
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    plugins: {
-                        legend: { display: false }
-                    },
-                    scales: {
-                        y: { beginAtZero: true, grid: { color: '#f5f5f5' } },
-                        x: { grid: { display: false } }
-                    }
+        const canvas = document.getElementById('chart-transaksi');
+        
+        // Debug: Cek data di console
+        console.log('Labels:', @json($labels ?? []));
+        console.log('Data:', @json($dataTransaksi ?? []));
+        
+        if (canvas) {
+            try {
+                const ctx = canvas.getContext('2d');
+                const labels = @json($labels ?? []);
+                const data = @json($dataTransaksi ?? []);
+                
+                if (labels.length === 0 || data.length === 0) {
+                    console.warn('Data grafik kosong');
+                    // Tampilkan pesan di canvas
+                    ctx.font = '16px Inter';
+                    ctx.fillStyle = '#999';
+                    ctx.textAlign = 'center';
+                    ctx.fillText('Belum ada data transaksi', canvas.width / 2, canvas.height / 2);
+                } else {
+                    new Chart(ctx, {
+                        type: 'line',
+                        data: {
+                            labels: labels,
+                            datasets: [{
+                                label: 'Jumlah Transaksi',
+                                data: data,
+                                borderColor: '#E8531A',
+                                backgroundColor: 'rgba(232, 83, 26, 0.1)',
+                                borderWidth: 3,
+                                fill: true,
+                                tension: 0.4,
+                                pointRadius: 5,
+                                pointBackgroundColor: '#E8531A',
+                                pointBorderColor: '#fff',
+                                pointBorderWidth: 2
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: true,
+                            plugins: {
+                                legend: {
+                                    display: false
+                                },
+                                tooltip: {
+                                    callbacks: {
+                                        label: function(context) {
+                                            return `Transaksi: ${context.raw} kali`;
+                                        }
+                                    }
+                                }
+                            },
+                            scales: {
+                                y: {
+                                    beginAtZero: true,
+                                    grid: {
+                                        color: '#f5f5f5'
+                                    },
+                                    title: {
+                                        display: true,
+                                        text: 'Jumlah Transaksi',
+                                        color: '#666'
+                                    }
+                                },
+                                x: {
+                                    grid: {
+                                        display: false
+                                    },
+                                    title: {
+                                        display: true,
+                                        text: 'Tanggal',
+                                        color: '#666'
+                                    }
+                                }
+                            }
+                        }
+                    });
                 }
-            });
+            } catch (error) {
+                console.error('Error creating chart:', error);
+            }
+        } else {
+            console.error('Canvas element not found!');
         }
     });
 </script>
-@endsection
+@endpush
